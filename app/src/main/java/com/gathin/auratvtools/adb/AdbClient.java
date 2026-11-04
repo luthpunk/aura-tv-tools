@@ -312,8 +312,23 @@ public final class AdbClient {
         sendFastInput("input swipe " + x1 + " " + y1 + " " + x2 + " " + y2 + " " + Math.max(50, durationMs));
     }
 
-    public void sendKey(int keyCode) {
-        sendFastInput("input keyevent " + keyCode);
+    /**
+     * Executes non-blocking fast input on ADB shell.
+     */
+    public void sendKey(final int keyCode) {
+        ioPool.execute(() -> {
+            try {
+                // Using exec: directly avoids shell wrapper overhead on STB
+                StreamChannel ch = openStream("exec:input keyevent " + keyCode);
+                closeStream(ch);
+            } catch (Exception e) {
+                try {
+                    StreamChannel ch = openStream("shell:input keyevent " + keyCode);
+                    closeStream(ch);
+                } catch (Exception ignored) {
+                }
+            }
+        });
     }
 
     public void sendText(String text) {
