@@ -341,13 +341,21 @@ public final class AdbClient {
      * Captures a live PNG screenshot from the STB and decodes it into a Bitmap.
      */
     public Bitmap captureScreenshot() throws Exception {
+        return captureScreenshot(1);
+    }
+
+    public Bitmap captureScreenshot(int inSampleSize) throws Exception {
         byte[] pngBytes = execRaw("exec:screencap -p");
-        Bitmap bmp = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.length);
+        BitmapFactory.Options opts = new BitmapFactory.Options();
+        if (inSampleSize > 1) {
+            opts.inSampleSize = inSampleSize;
+        }
+        Bitmap bmp = BitmapFactory.decodeByteArray(pngBytes, 0, pngBytes.length, opts);
         if (bmp != null) return bmp;
         // Fallback for older STB firmwares that convert LF to CRLF on shell:
         execCommand("screencap -p /data/local/tmp/aura_shot.png");
         byte[] fallback = execRaw("exec:cat /data/local/tmp/aura_shot.png");
-        return BitmapFactory.decodeByteArray(fallback, 0, fallback.length);
+        return BitmapFactory.decodeByteArray(fallback, 0, fallback.length, opts);
     }
 
     /**

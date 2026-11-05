@@ -1,7 +1,7 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0-id",
+  "versionCode": 3,
+  "versionName": "1.2.0-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "perf: simplify UI, instant remote keys, 360p/480p low-latency mirror (v1.1.0-id)",
-  "releaseDate": "2026-11-04"
+  "changelog": "feat: Modern Light UI, left-docked mirror with right D-Pad sidebar, tactile button feedback, animated loading & popups (v1.2.0-id)",
+  "releaseDate": "2026-11-05"
 }
