@@ -563,15 +563,22 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
             codec.start();
 
             MediaCodec.BufferInfo info = new MediaCodec.BufferInfo();
-            byte[] chunk = new byte[32768];
             byte[] streamBuf = new byte[262144];
             int streamLen = 0;
 
-            try (AdbClient.StreamSession session = AdbClient.get().openExecStream("exec:" + cmd)) {
+            AdbClient.StreamChannel ch = AdbClient.get().openStream("exec:" + cmd);
+            try {
                 while (running && currentMode != 0 && AdbClient.get().isConnected()) {
-                    int r = session.in.read(chunk);
-                    if (r < 0) break;
-                    if (r == 0) continue;
+                    byte[] chunk = ch.readChunk(2000);
+                    if (chunk == null) {
+                        if (!ch.isOpen()) break;
+                        continue;
+                    }
+                    int r = chunk.length;
+                    if (r == 0) {
+                        if (!ch.isOpen()) break;
+                        continue;
+                    }
 
                     if (streamLen + r > streamBuf.length) {
                         streamBuf = Arrays.copyOf(streamBuf, Math.max(streamBuf.length * 2, streamLen + r));
@@ -605,6 +612,8 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
                         offset = nextNal;
                     }
                 }
+            } finally {
+                AdbClient.get().closeStream(ch);
             }
             return true;
         } catch (Exception e) {
