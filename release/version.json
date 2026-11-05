@@ -2,6 +2,6 @@
   "versionCode": 3,
   "versionName": "1.2.0-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "feat: Modern Light UI, left-docked mirror with right D-Pad sidebar, tactile button feedback, animated loading & popups (v1.2.0-id)",
+  "changelog": "fix(mirror): use AdbClient.openStream with StreamChannel reader and clean manifest",
   "releaseDate": "2026-11-05"
 }
