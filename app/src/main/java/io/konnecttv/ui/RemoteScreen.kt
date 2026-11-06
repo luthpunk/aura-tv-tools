@@ -140,7 +140,7 @@ private fun DPad(press: (Int) -> Unit) {
 
 @Composable
 private fun Arrow(rotation: Float, modifier: Modifier, onClick: () -> Unit) =
-    Box(modifier.clickable(onClick = onClick), contentAlignment = Alignment.Center) { Glyph(Glyphs.Chevron, C.Muted, 30.dp, Modifier.rotate(rotation)) }
+    Box(modifier.clickable(onClick = onClick), contentAlignment = Alignment.Center) { Glyph(Glyphs.Chevron, C.Text, 30.dp, Modifier.rotate(rotation)) }
 
 @Composable
 private fun KeyRow(content: @Composable RowScope.() -> Unit) =

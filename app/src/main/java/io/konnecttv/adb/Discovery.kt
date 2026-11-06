@@ -5,10 +5,18 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.os.Build
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
 import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.net.Socket
 import java.util.concurrent.Executor
 
 /** A TV seen on the Wi-Fi. Ports are null until that service shows up. */
@@ -25,10 +33,43 @@ private const val REMOTE = "_androidtvremote2._tcp." // every Android/Google TV,
 private const val PAIR = "_adb-tls-pairing._tcp."
 private const val CONNECT = "_adb-tls-connect._tcp."
 
+private fun getSubnetPrefixes(context: Context): List<String> {
+    val prefixes = LinkedHashSet<String>()
+    try {
+        val wm = context.applicationContext.getSystemService(Context.WIFI_SERVICE) as? WifiManager
+        val ip = wm?.connectionInfo?.ipAddress ?: 0
+        if (ip != 0) {
+            prefixes += "${ip and 0xff}.${(ip shr 8) and 0xff}.${(ip shr 16) and 0xff}."
+        }
+    } catch (_: Exception) {}
+
+    try {
+        val interfaces = NetworkInterface.getNetworkInterfaces()
+        if (interfaces != null) {
+            for (iface in interfaces) {
+                if (iface.isLoopback || !iface.isUp) continue
+                for (addr in iface.inetAddresses) {
+                    if (addr is Inet4Address && !addr.isLoopbackAddress) {
+                        val host = addr.hostAddress ?: continue
+                        val parts = host.split('.')
+                        if (parts.size == 4) {
+                            prefixes += "${parts[0]}.${parts[1]}.${parts[2]}."
+                        }
+                    }
+                }
+            }
+        }
+    } catch (_: Exception) {}
+
+    if (prefixes.isEmpty()) {
+        prefixes += "192.168.1."
+    }
+    return prefixes.toList()
+}
+
 /**
- * Finds Android TVs over mDNS. Emits the full, merged list each time something new resolves.
- * Classic "network debugging" on port 5555 doesn't announce itself, so those TVs show up
- * through the remote service and get tried on 5555.
+ * Finds Android TVs over mDNS AND parallel port 5555 probe.
+ * Classic ADB debugging on port 5555 doesn't announce mDNS, so we probe the subnet directly.
  */
 fun discoverTvs(context: Context): Flow<List<FoundTv>> = callbackFlow {
     val nsd = context.getSystemService(NsdManager::class.java)
@@ -47,7 +88,7 @@ fun discoverTvs(context: Context): Flow<List<FoundTv>> = callbackFlow {
         }
         val host = address?.hostAddress ?: return@synchronized
         // Only the TV remote service carries a friendly name; adb services are named "adb-<serial>-xyz".
-        val old = tvs[host] ?: FoundTv(host, if (type == REMOTE) info.serviceName else "Android device")
+        val old = tvs[host] ?: FoundTv(host, if (type == REMOTE) info.serviceName else "Android TV ($host)")
         tvs[host] = when (type) {
             REMOTE -> old.copy(name = info.serviceName)
             PAIR -> old.copy(pairPort = info.port)
@@ -104,8 +145,34 @@ fun discoverTvs(context: Context): Flow<List<FoundTv>> = callbackFlow {
         }.also { nsd.discoverServices(type, NsdManager.PROTOCOL_DNS_SD, it) }
     }
 
+    // Parallel Subnet Probing on port 5555 for instant TV discovery (<1.5s)
+    val scanJob = CoroutineScope(Dispatchers.IO).launch {
+        val prefixes = getSubnetPrefixes(context)
+        for (prefix in prefixes) {
+            if (isClosedForSend) break
+            val tasks = (1..254).map { i ->
+                async {
+                    val candidate = "$prefix$i"
+                    try {
+                        Socket().use { s ->
+                            s.connect(InetSocketAddress(candidate, 5555), 320)
+                            synchronized(tvs) {
+                                val old = tvs[candidate]
+                                tvs[candidate] = old?.copy(tlsPort = old.tlsPort ?: 5555)
+                                    ?: FoundTv(host = candidate, name = "Android TV ($candidate)", tlsPort = 5555)
+                                trySend(tvs.values.toList())
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }
+            }
+            tasks.awaitAll()
+        }
+    }
+
     trySend(emptyList())
     awaitClose {
+        scanJob.cancel()
         listeners.forEach { runCatching { nsd.stopServiceDiscovery(it) } }
         if (Build.VERSION.SDK_INT >= 34) {
             synchronized(callbacks) { callbacks.forEach { runCatching { nsd.unregisterServiceInfoCallback(it) } } }

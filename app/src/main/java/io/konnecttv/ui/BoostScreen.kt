@@ -125,10 +125,10 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
         }
 
         GlassSheet(launcherMenu, onDismiss = { launcherMenu = false }) {
-            Text("Glowlauncher", style = Body.copy(fontSize = 17.sp))
-            Text("Active on ${tv.name}.", style = Small)
-            PrimaryButton("Edit home apps") { launcherMenu = false; vm.loadHomeChoices(); pickHome = true }
-            SecondaryButton("Turn off, bring back the TV's own home") { launcherMenu = false; vm.setLauncher(false) }
+            Text("Aura TV Home", style = Body.copy(fontSize = 17.sp))
+            Text("Aktif di ${tv.name}.", style = Small)
+            PrimaryButton("Buka Aura TV Home") { launcherMenu = false; vm.key(io.konnecttv.adb.Key.HOME) }
+            SecondaryButton("Kembalikan Beranda Bawaan TV") { launcherMenu = false; vm.setLauncher(false) }
         }
 
         val setup by vm.launcherSetup.collectAsStateWithLifecycle()
@@ -177,12 +177,12 @@ private fun LauncherOrb(on: Boolean, busy: Boolean, tvName: String, onClick: () 
                 }
             }
             Spacer(Modifier.height(12.dp))
-            Text("Glowlauncher", style = Body.copy(fontSize = 20.sp, fontWeight = FontWeight.SemiBold))
+            Text("Aura TV Home", style = Body.copy(fontSize = 20.sp, fontWeight = FontWeight.SemiBold))
             Spacer(Modifier.height(8.dp))
             val pill = when {
-                busy -> "WORKING…"
-                on -> "ACTIVE ON ${tvName.uppercase()}"
-                else -> "TAP THE ORB TO CLEAN"
+                busy -> "MEMPROSES…"
+                on -> "AKTIF DI ${tvName.uppercase()}"
+                else -> "KETUK UNTUK MEMASANG"
             }
             Text(
                 pill,
@@ -190,13 +190,13 @@ private fun LauncherOrb(on: Boolean, busy: Boolean, tvName: String, onClick: () 
                 modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(if (on) C.Accent.copy(alpha = 0.13f) else C.Raised).padding(horizontal = 12.dp, vertical = 5.dp),
             )
             Spacer(Modifier.height(10.dp))
-            Text("A calm home screen with only the apps you pick. Undo anytime.", style = Small, textAlign = TextAlign.Center)
+            Text("Launcher TV modern, ringan, dan cepat. Bebas iklan.", style = Small, textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
         }
     }
 }
 
-/** Turning Glowlauncher on: every step as it happens, a running clock, and why the TV may look stuck. */
+/** Turning Aura TV Home on: every step as it happens, a running clock. */
 @Composable
 private fun SetupProgress(st: LauncherSetup, onClose: () -> Unit) {
     val running = !st.done && st.error == null
@@ -224,7 +224,7 @@ private fun SetupProgress(st: LauncherSetup, onClose: () -> Unit) {
         }
         Spacer(Modifier.height(10.dp))
         Text(
-            when { st.error != null -> "Didn't finish"; st.done -> "Glowlauncher is on"; else -> "Turning on Glowlauncher" },
+            when { st.error != null -> "Gagal memasang"; st.done -> "Aura TV Home aktif"; else -> "Memasang Aura TV Home" },
             style = Body.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold),
         )
         Text(String.format(Locale.US, "%d:%02d", secs / 60, secs % 60), style = Small.copy(fontFeatureSettings = "tnum"))
@@ -247,15 +247,14 @@ private fun SetupProgress(st: LauncherSetup, onClose: () -> Unit) {
     }
     when {
         st.error != null -> Text(st.error, style = Small.copy(color = C.Danger))
-        st.done -> Text("Press Home on the remote to see it.", style = Small)
+        st.done -> Text("Tekan Home pada remote TV untuk melihat hasilnya.", style = Small)
         else -> Text(
-            "The TV can look frozen for up to 2 minutes while it switches home screens. That's normal. " +
-                "Leave it on and don't unplug it.",
+            "TV mungkin terlihat diam sesaat saat beralih beranda. Harap tunggu hingga selesai.",
             style = Small.copy(color = C.Muted),
             modifier = Modifier.clip(RoundedCornerShape(12.dp)).background(C.Raised).padding(12.dp),
         )
     }
-    if (!running) PrimaryButton("Done", onClick = onClose)
+    if (!running) PrimaryButton("Selesai", onClick = onClose)
 }
 
 /** Choose what the clean home shows. Preinstalled apps like Netflix and Prime are here too. */

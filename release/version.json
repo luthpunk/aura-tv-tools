@@ -1,7 +1,7 @@
 {
-  "versionCode": 5,
-  "versionName": "1.4.0-id",
+  "versionCode": 6,
+  "versionName": "1.4.1-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "fix(build): use compileSdk 37 as required by core-ktx and enable sdkDownload",
+  "changelog": "feat: subnet port 5555 fast discovery, direct multiplexed mirroring without reconnect hang, Aura TV Home boost installer & modern dark D-Pad UI",
   "releaseDate": "2026-11-06"
 }

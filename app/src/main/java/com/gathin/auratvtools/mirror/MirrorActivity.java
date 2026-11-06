@@ -3,7 +3,6 @@ package com.gathin.auratvtools.mirror;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ContentValues;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.Color;
@@ -23,7 +22,6 @@ import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.MotionEvent;
-import android.view.Surface;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
@@ -37,25 +35,37 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import com.gathin.auratvtools.adb.AdbClient;
+import io.github.muntashirakon.adb.AdbStream;
+import io.konnecttv.TvViewModel;
+import io.konnecttv.adb.Adb;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.io.OutputStream;
-import java.nio.ByteBuffer;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.Date;
 import java.util.Locale;
 
 /**
- * Super lightweight STB Screen Mirroring with:
- * - Left docked 16:9 Live Video / Snapshot Viewport
- * - Right dedicated Remote Control sidebar with unified D-Pad, controls, and resolution switch
- * - Tactile press bounce feedback on all buttons
+ * Modern STB Screen Mirroring matching Aura TV Tools Dark Aesthetic:
+ * - Direct multiplexed ADB streaming via authenticated TvViewModel Adb session (zero hang / no RSA prompt)
+ * - 16:9 Live Video / Snapshot Viewport docked strictly left
+ * - Sleek Matte Dark Remote Sidebar with unified circular D-Pad and tactile feedback
  * - Instant Screenshot capture with dialog preview
  */
 public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
+
+    private static final int COLOR_BG = 0xFF0C0C0F;
+    private static final int COLOR_CARD = 0xFF16161B;
+    private static final int COLOR_BORDER = 0xFF222229;
+    private static final int COLOR_RAISED = 0xFF1F1F26;
+    private static final int COLOR_TEXT = 0xFFECEEF4;
+    private static final int COLOR_MUTED = 0xFF8A8D99;
+    private static final int COLOR_ACCENT = 0xFF7CF0B0;
+    private static final int COLOR_ACCENT_BG = 0xFF10201A;
+    private static final int COLOR_DANGER = 0xFFFF7A7A;
 
     private SurfaceView surfaceView;
     private ImageView frameView;
@@ -69,7 +79,6 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
 
     // 0 = Fast Snapshot (100% reliable fallback), 1 = Video 720p H.264, 2 = Video 480p H.264
     private volatile int currentMode = 0;
-    private volatile long lastFrameTime = 0;
     private volatile Bitmap latestFrameBitmap = null;
 
     @Override
@@ -81,44 +90,22 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
 
         buildUi();
 
-        String host = getIntent().getStringExtra("host");
-        int port = getIntent().getIntExtra("port", 5555);
+        Adb adb = TvViewModel.Companion.getActiveAdb();
+        if (adb == null || !adb.isConnected()) {
+            Toast.makeText(this, "STB belum terhubung di aplikasi! Silakan hubungkan TV terlebih dahulu.", Toast.LENGTH_LONG).show();
+            finish();
+            return;
+        }
 
-        if (!AdbClient.get().isConnected()) {
-            if (host != null && !host.trim().isEmpty()) {
-                if (statusBadge != null) {
-                    statusBadge.setText("Menghubungkan ke " + host + "...");
-                }
-                new Thread(() -> {
-                    try {
-                        AdbClient.get().connect(this, host.trim(), port);
-                        uiHandler.post(() -> {
-                            if (statusBadge != null) {
-                                statusBadge.setText("🟢 Terhubung ke " + host);
-                            }
-                            if (surfaceReady && !running) {
-                                startStreaming();
-                            }
-                        });
-                    } catch (Exception e) {
-                        uiHandler.post(() -> {
-                            Toast.makeText(this, "Gagal terhubung ke TV: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                            finish();
-                        });
-                    }
-                }).start();
-            } else {
-                Toast.makeText(this, "Belum terhubung ke STB!", Toast.LENGTH_SHORT).show();
-                finish();
-            }
+        if (statusBadge != null) {
+            statusBadge.setText("● LIVE STREAMING");
         }
     }
 
     private void buildUi() {
-        // Horizontal Root Layout: Left = Video, Right = Remote Sidebar
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.HORIZONTAL);
-        root.setBackgroundColor(Color.parseColor("#090D16"));
+        root.setBackgroundColor(COLOR_BG);
 
         // -------------------------------------------------------------
         // LEFT: 16:9 Video Viewport (Full height, docked strictly left)
@@ -128,10 +115,8 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
             protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
                 int totalH = MeasureSpec.getSize(heightMeasureSpec);
                 int totalW = MeasureSpec.getSize(widthMeasureSpec);
-                // Standard 16:9 width based on full screen height
                 int targetW = (totalH * 16) / 9;
-                // Reserve minimum 220dp for right sidebar on narrower screens
-                int maxVideoW = totalW - dp(210);
+                int maxVideoW = totalW - dp(220);
                 if (maxVideoW > 0 && targetW > maxVideoW) {
                     targetW = maxVideoW;
                 }
@@ -142,14 +127,12 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         };
         videoContainer.setBackgroundColor(Color.BLACK);
 
-        // Layer 1: SurfaceView for H.264 MediaCodec
         surfaceView = new SurfaceView(this);
         surfaceView.getHolder().addCallback(this);
         videoContainer.addView(surfaceView, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // Layer 2: ImageView for Rapid Frame Snapshot Engine
         frameView = new ImageView(this);
         frameView.setScaleType(ImageView.ScaleType.FIT_CENTER);
         frameView.setVisibility(View.VISIBLE);
@@ -161,11 +144,11 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         // -------------------------------------------------------------
-        // RIGHT: Dedicated Modern Light Remote & Control Sidebar
+        // RIGHT: Dedicated Modern Dark Remote Sidebar
         // -------------------------------------------------------------
         ScrollView sidebarScroll = new ScrollView(this);
         sidebarScroll.setFillViewport(true);
-        sidebarScroll.setBackgroundColor(Color.parseColor("#F8FAFC")); // Slate 50 Modern Light
+        sidebarScroll.setBackgroundColor(COLOR_BG);
 
         LinearLayout.LayoutParams scrollLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 1f);
         sidebarScroll.setLayoutParams(scrollLp);
@@ -173,20 +156,20 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         LinearLayout sidebar = new LinearLayout(this);
         sidebar.setOrientation(LinearLayout.VERTICAL);
         sidebar.setGravity(Gravity.CENTER_HORIZONTAL);
-        sidebar.setPadding(dp(10), dp(10), dp(10), dp(12));
+        sidebar.setPadding(dp(12), dp(10), dp(12), dp(12));
 
         // 1. Top Section: Mode, Screenshot, Close
         LinearLayout topControls = new LinearLayout(this);
         topControls.setOrientation(LinearLayout.HORIZONTAL);
         topControls.setGravity(Gravity.CENTER_VERTICAL);
-        topControls.setPadding(0, 0, 0, dp(6));
+        topControls.setPadding(0, 0, 0, dp(8));
 
         modeBtn = createSidebarTopBtn("⚡ Snapshot", this::cycleMode);
         topControls.addView(modeBtn, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         TextView shotBtn = createSidebarTopBtn("📸", this::captureAndSaveShot);
-        LinearLayout.LayoutParams shotLp = new LinearLayout.LayoutParams(dp(40), dp(36));
-        shotLp.setMargins(dp(4), 0, dp(4), 0);
+        LinearLayout.LayoutParams shotLp = new LinearLayout.LayoutParams(dp(42), dp(36));
+        shotLp.setMargins(dp(6), 0, dp(6), 0);
         topControls.addView(shotBtn, shotLp);
 
         TextView closeBtn = createSidebarTopBtn("✕", this::finish);
@@ -198,86 +181,95 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         // Status Badge
         statusBadge = new TextView(this);
         statusBadge.setText("● LIVE SNAPSHOT");
-        statusBadge.setTextColor(Color.parseColor("#15803D"));
+        statusBadge.setTextColor(COLOR_ACCENT);
         statusBadge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f);
         statusBadge.setTypeface(Typeface.DEFAULT_BOLD);
         statusBadge.setGravity(Gravity.CENTER);
         statusBadge.setPadding(dp(8), dp(4), dp(8), dp(4));
         GradientDrawable badgeBg = new GradientDrawable();
-        badgeBg.setColor(Color.parseColor("#DCFCE7"));
+        badgeBg.setColor(COLOR_ACCENT_BG);
         badgeBg.setCornerRadius(dp(99));
-        badgeBg.setStroke(dp(1), Color.parseColor("#BBF7D0"));
+        badgeBg.setStroke(dp(1), 0xFF1A382B);
         statusBadge.setBackground(badgeBg);
         LinearLayout.LayoutParams sbLp = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sbLp.bottomMargin = dp(8);
+        sbLp.bottomMargin = dp(10);
         sidebar.addView(statusBadge, sbLp);
 
-        // 2. Middle Section: UNIFIED INTEGRATED D-PAD (Gabung Jadi Satu)
-        LinearLayout dpadContainer = new LinearLayout(this);
-        dpadContainer.setOrientation(LinearLayout.VERTICAL);
-        dpadContainer.setGravity(Gravity.CENTER);
-        dpadContainer.setPadding(dp(8), dp(8), dp(8), dp(8));
+        // 2. Middle Section: Sleek D-PAD matching Aura TV Tools
+        FrameLayout dpadContainer = new FrameLayout(this);
+        int dpadSize = dp(176);
+        LinearLayout.LayoutParams dpadLp = new LinearLayout.LayoutParams(dpadSize, dpadSize);
+        dpadLp.gravity = Gravity.CENTER_HORIZONTAL;
+        dpadLp.bottomMargin = dp(12);
+        dpadContainer.setLayoutParams(dpadLp);
 
         GradientDrawable dpadBg = new GradientDrawable();
-        dpadBg.setColor(Color.parseColor("#FFFFFF"));
-        dpadBg.setCornerRadius(dp(22));
-        dpadBg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        dpadBg.setShape(GradientDrawable.OVAL);
+        dpadBg.setColor(COLOR_CARD);
+        dpadBg.setStroke(dp(1), COLOR_BORDER);
         dpadContainer.setBackground(dpadBg);
 
-        // D-Pad UP
-        TextView upBtn = createDpadBtn("▲", KeyEvent.KEYCODE_DPAD_UP, false);
-        dpadContainer.addView(upBtn, new LinearLayout.LayoutParams(dp(54), dp(42)));
+        // Directional buttons around center
+        TextView upBtn = createDpadArrowBtn("▲", KeyEvent.KEYCODE_DPAD_UP);
+        FrameLayout.LayoutParams upLp = new FrameLayout.LayoutParams(dp(54), dp(48), Gravity.TOP | Gravity.CENTER_HORIZONTAL);
+        dpadContainer.addView(upBtn, upLp);
 
-        // D-Pad MID ROW (LEFT - OK - RIGHT)
-        LinearLayout midRow = new LinearLayout(this);
-        midRow.setOrientation(LinearLayout.HORIZONTAL);
-        midRow.setGravity(Gravity.CENTER);
-        midRow.setPadding(0, dp(4), 0, dp(4));
+        TextView downBtn = createDpadArrowBtn("▼", KeyEvent.KEYCODE_DPAD_DOWN);
+        FrameLayout.LayoutParams downLp = new FrameLayout.LayoutParams(dp(54), dp(48), Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
+        dpadContainer.addView(downBtn, downLp);
 
-        TextView leftBtn = createDpadBtn("◀", KeyEvent.KEYCODE_DPAD_LEFT, false);
-        TextView okBtn = createDpadBtn("OK", KeyEvent.KEYCODE_DPAD_CENTER, true);
-        TextView rightBtn = createDpadBtn("▶", KeyEvent.KEYCODE_DPAD_RIGHT, false);
+        TextView leftBtn = createDpadArrowBtn("◀", KeyEvent.KEYCODE_DPAD_LEFT);
+        FrameLayout.LayoutParams leftLp = new FrameLayout.LayoutParams(dp(48), dp(54), Gravity.START | Gravity.CENTER_VERTICAL);
+        dpadContainer.addView(leftBtn, leftLp);
 
-        midRow.addView(leftBtn, new LinearLayout.LayoutParams(dp(44), dp(44)));
-        LinearLayout.LayoutParams okLp = new LinearLayout.LayoutParams(dp(54), dp(44));
-        okLp.setMargins(dp(6), 0, dp(6), 0);
-        midRow.addView(okBtn, okLp);
-        midRow.addView(rightBtn, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        TextView rightBtn = createDpadArrowBtn("▶", KeyEvent.KEYCODE_DPAD_RIGHT);
+        FrameLayout.LayoutParams rightLp = new FrameLayout.LayoutParams(dp(48), dp(54), Gravity.END | Gravity.CENTER_VERTICAL);
+        dpadContainer.addView(rightBtn, rightLp);
 
-        dpadContainer.addView(midRow);
+        // Center OK Button
+        TextView okBtn = new TextView(this);
+        okBtn.setText("OK");
+        okBtn.setTextColor(COLOR_ACCENT);
+        okBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15f);
+        okBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        okBtn.setGravity(Gravity.CENTER);
+        GradientDrawable okBg = new GradientDrawable();
+        okBg.setShape(GradientDrawable.OVAL);
+        okBg.setColor(COLOR_RAISED);
+        okBg.setStroke(dp(1), COLOR_BORDER);
+        okBtn.setBackground(okBg);
+        applyPressFeedback(okBtn);
+        okBtn.setOnClickListener(v -> {
+            vibrate(14);
+            sendAdbKey(KeyEvent.KEYCODE_DPAD_CENTER);
+        });
+        FrameLayout.LayoutParams okLp = new FrameLayout.LayoutParams(dp(68), dp(68), Gravity.CENTER);
+        dpadContainer.addView(okBtn, okLp);
 
-        // D-Pad DOWN
-        TextView downBtn = createDpadBtn("▼", KeyEvent.KEYCODE_DPAD_DOWN, false);
-        dpadContainer.addView(downBtn, new LinearLayout.LayoutParams(dp(54), dp(42)));
+        sidebar.addView(dpadContainer);
 
-        LinearLayout.LayoutParams dpadBoxLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        dpadBoxLp.bottomMargin = dp(8);
-        sidebar.addView(dpadContainer, dpadBoxLp);
+        // 3. Lower Section: Functional Remote Grid
+        LinearLayout row1 = new LinearLayout(this);
+        row1.setOrientation(LinearLayout.HORIZONTAL);
+        row1.addView(createSmallRemoteBtn("⮌ Back", KeyEvent.KEYCODE_BACK), gridSmallLp());
+        row1.addView(createSmallRemoteBtn("⌂ Home", KeyEvent.KEYCODE_HOME), gridSmallLp());
+        row1.addView(createSmallRemoteBtn("≡ Menu", KeyEvent.KEYCODE_MENU), gridSmallLp());
+        sidebar.addView(row1, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // 3. Bottom Section: Quick Nav & Utility Buttons
-        // Row A: Back, Home, Recents, Menu
-        LinearLayout navRow = new LinearLayout(this);
-        navRow.setOrientation(LinearLayout.HORIZONTAL);
-        navRow.addView(createSmallRemoteBtn("◁", KeyEvent.KEYCODE_BACK), gridSmallLp());
-        navRow.addView(createSmallRemoteBtn("⌂", KeyEvent.KEYCODE_HOME), gridSmallLp());
-        navRow.addView(createSmallRemoteBtn("❐", KeyEvent.KEYCODE_APP_SWITCH), gridSmallLp());
-        navRow.addView(createSmallRemoteBtn("☰", KeyEvent.KEYCODE_MENU), gridSmallLp());
-        sidebar.addView(navRow, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        LinearLayout row2 = new LinearLayout(this);
+        row2.setOrientation(LinearLayout.HORIZONTAL);
+        row2.addView(createSmallRemoteBtn("Vol −", KeyEvent.KEYCODE_VOLUME_DOWN), gridSmallLp());
+        row2.addView(createSmallRemoteBtn("🔇 Mute", KeyEvent.KEYCODE_VOLUME_MUTE), gridSmallLp());
+        row2.addView(createSmallRemoteBtn("Vol +", KeyEvent.KEYCODE_VOLUME_UP), gridSmallLp());
+        sidebar.addView(row2, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        // Row B: Vol-, Vol+, Mute, Power
-        LinearLayout volRow = new LinearLayout(this);
-        volRow.setOrientation(LinearLayout.HORIZONTAL);
-        volRow.addView(createSmallRemoteBtn("🔉", KeyEvent.KEYCODE_VOLUME_DOWN), gridSmallLp());
-        volRow.addView(createSmallRemoteBtn("🔊", KeyEvent.KEYCODE_VOLUME_UP), gridSmallLp());
-        volRow.addView(createSmallRemoteBtn("🔇", KeyEvent.KEYCODE_VOLUME_MUTE), gridSmallLp());
-        volRow.addView(createSmallRemoteBtn("⏻", KeyEvent.KEYCODE_POWER), gridSmallLp());
-        LinearLayout.LayoutParams vrLp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        vrLp.topMargin = dp(4);
-        sidebar.addView(volRow, vrLp);
+        LinearLayout row3 = new LinearLayout(this);
+        row3.setOrientation(LinearLayout.HORIZONTAL);
+        TextView powerBtn = createSmallRemoteBtn("⏻ Power", KeyEvent.KEYCODE_POWER);
+        powerBtn.setTextColor(COLOR_DANGER);
+        row3.addView(powerBtn, gridSmallLp());
+        sidebar.addView(row3, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         sidebarScroll.addView(sidebar);
         root.addView(sidebarScroll);
@@ -285,25 +277,28 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         setContentView(root);
     }
 
-    private TextView createDpadBtn(String label, final int keyCode, boolean isOk) {
+    private void sendAdbKey(int keyCode) {
+        Adb adb = TvViewModel.Companion.getActiveAdb();
+        if (adb != null) {
+            new Thread(() -> {
+                try {
+                    adb.keyevent(keyCode);
+                } catch (Exception ignored) {}
+            }).start();
+        }
+    }
+
+    private TextView createDpadArrowBtn(String arrow, final int keyCode) {
         TextView btn = new TextView(this);
-        btn.setText(label);
-        btn.setTextColor(isOk ? Color.WHITE : Color.parseColor("#0F172A"));
-        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, isOk ? 13f : 15f);
+        btn.setText(arrow);
+        btn.setTextColor(COLOR_TEXT);
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f);
         btn.setTypeface(Typeface.DEFAULT_BOLD);
         btn.setGravity(Gravity.CENTER);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(isOk ? Color.parseColor("#0284C7") : Color.parseColor("#F1F5F9"));
-        bg.setCornerRadius(dp(isOk ? 16 : 12));
-        bg.setStroke(dp(1), isOk ? Color.parseColor("#38BDF8") : Color.parseColor("#CBD5E1"));
-        btn.setBackground(bg);
-
         applyPressFeedback(btn);
-
         btn.setOnClickListener(v -> {
             vibrate(12);
-            AdbClient.get().sendKey(keyCode);
+            sendAdbKey(keyCode);
         });
         return btn;
     }
@@ -311,20 +306,19 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
     private TextView createSidebarTopBtn(String label, final Runnable action) {
         TextView btn = new TextView(this);
         btn.setText(label);
-        btn.setTextColor(Color.parseColor("#0F172A"));
+        btn.setTextColor(COLOR_TEXT);
         btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11.5f);
         btn.setTypeface(Typeface.DEFAULT_BOLD);
         btn.setGravity(Gravity.CENTER);
         btn.setPadding(dp(6), dp(6), dp(6), dp(6));
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#FFFFFF"));
+        bg.setColor(COLOR_CARD);
         bg.setCornerRadius(dp(10));
-        bg.setStroke(dp(1), Color.parseColor("#CBD5E1"));
+        bg.setStroke(dp(1), COLOR_BORDER);
         btn.setBackground(bg);
 
         applyPressFeedback(btn);
-
         btn.setOnClickListener(v -> {
             vibrate(10);
             action.run();
@@ -335,23 +329,22 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
     private TextView createSmallRemoteBtn(String label, final int keyCode) {
         TextView btn = new TextView(this);
         btn.setText(label);
-        btn.setTextColor(Color.parseColor("#0F172A"));
-        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f);
+        btn.setTextColor(COLOR_TEXT);
+        btn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         btn.setTypeface(Typeface.DEFAULT_BOLD);
         btn.setGravity(Gravity.CENTER);
-        btn.setPadding(0, dp(8), 0, dp(8));
+        btn.setPadding(0, dp(10), 0, dp(10));
 
         GradientDrawable bg = new GradientDrawable();
-        bg.setColor(Color.parseColor("#FFFFFF"));
-        bg.setCornerRadius(dp(10));
-        bg.setStroke(dp(1), Color.parseColor("#E2E8F0"));
+        bg.setColor(COLOR_CARD);
+        bg.setCornerRadius(dp(12));
+        bg.setStroke(dp(1), COLOR_BORDER);
         btn.setBackground(bg);
 
         applyPressFeedback(btn);
-
         btn.setOnClickListener(v -> {
             vibrate(10);
-            AdbClient.get().sendKey(keyCode);
+            sendAdbKey(keyCode);
         });
         return btn;
     }
@@ -362,18 +355,15 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         return lp;
     }
 
-    /**
-     * Tactile press animation feedback: shrinks slightly on press, springs back on release.
-     */
     private static void applyPressFeedback(final View view) {
         view.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
-                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(70).start();
+                    v.animate().scaleX(0.92f).scaleY(0.92f).setDuration(60).start();
                     break;
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(70).start();
+                    v.animate().scaleX(1.0f).scaleY(1.0f).setDuration(60).start();
                     break;
             }
             return false;
@@ -402,7 +392,8 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
             try {
                 Bitmap bmp = latestFrameBitmap;
                 if (bmp == null) {
-                    bmp = AdbClient.get().captureScreenshot(1);
+                    Adb adb = TvViewModel.Companion.getActiveAdb();
+                    if (adb != null) bmp = adb.captureScreenshot(1);
                 }
                 if (bmp == null) {
                     uiHandler.post(() -> Toast.makeText(this, "Gagal membaca layar STB", Toast.LENGTH_SHORT).show());
@@ -445,7 +436,7 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
     }
 
     private void showScreenshotSuccessDialog(Bitmap bmp, String fileName, final Uri uri) {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Light_Dialog_Alert);
+        AlertDialog.Builder builder = new AlertDialog.Builder(this, android.R.style.Theme_DeviceDefault_Dialog_Alert);
         builder.setTitle("📸 Tangkapan Layar STB");
 
         LinearLayout layout = new LinearLayout(this);
@@ -463,7 +454,7 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
 
         TextView info = new TextView(this);
         info.setText("Tersimpan ke Pictures/AuraTV:\n" + fileName);
-        info.setTextColor(Color.parseColor("#0F172A"));
+        info.setTextColor(COLOR_TEXT);
         info.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f);
         layout.addView(info);
 
@@ -527,13 +518,14 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
     }
 
     private void runStreamLoop() {
-        while (running && AdbClient.get().isConnected()) {
+        while (running) {
+            Adb adb = TvViewModel.Companion.getActiveAdb();
+            if (adb == null || !adb.isConnected()) break;
+
             if (currentMode == 0) {
-                // Engine 1: High-Speed Live Frame Snapshot (100% Reliable fallback on any STB)
-                runSnapshotLoop();
+                runSnapshotLoop(adb);
             } else {
-                // Engine 2: Hardware H.264 Stream
-                boolean ok = runH264Loop();
+                boolean ok = runH264Loop(adb);
                 if (!ok && running) {
                     uiHandler.post(() -> {
                         Toast.makeText(this, "H.264 tidak didukung oleh STB, beralih ke Mode Snapshot", Toast.LENGTH_SHORT).show();
@@ -547,32 +539,29 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         }
     }
 
-    private void runSnapshotLoop() {
+    private void runSnapshotLoop(Adb adb) {
         uiHandler.post(() -> frameView.setVisibility(View.VISIBLE));
-        while (running && currentMode == 0 && AdbClient.get().isConnected()) {
+        while (running && currentMode == 0 && adb.isConnected()) {
             try {
-                // inSampleSize = 2 for 4x faster JPEG/PNG decoding and lower memory
-                final Bitmap bmp = AdbClient.get().captureScreenshot(2);
+                final Bitmap bmp = adb.captureScreenshot(2);
                 if (bmp != null) {
                     latestFrameBitmap = bmp;
-                    lastFrameTime = System.currentTimeMillis();
                     uiHandler.post(() -> {
                         if (running && currentMode == 0) {
                             frameView.setImageBitmap(bmp);
                         }
                     });
                 }
-                // Short throttle ~40ms (~20-25 FPS theoretical max for adb screencap)
                 Thread.sleep(40);
             } catch (InterruptedException e) {
                 break;
             } catch (Exception e) {
-                try { Thread.sleep(250); } catch (InterruptedException ignored) { break; }
+                try { Thread.sleep(200); } catch (InterruptedException ignored) { break; }
             }
         }
     }
 
-    private boolean runH264Loop() {
+    private boolean runH264Loop(Adb adb) {
         uiHandler.post(() -> frameView.setVisibility(View.GONE));
         int targetW = currentMode == 1 ? 1280 : 864;
         int targetH = currentMode == 1 ? 720 : 480;
@@ -582,6 +571,7 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
                 + " --bit-rate " + bitRate + " --time-limit 180 -";
 
         MediaCodec codec = null;
+        AdbStream stream = null;
         try {
             MediaFormat format = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, targetW, targetH);
             codec = MediaCodec.createDecoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
@@ -592,59 +582,54 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
             byte[] streamBuf = new byte[262144];
             int streamLen = 0;
 
-            AdbClient.StreamChannel ch = AdbClient.get().openStream("exec:" + cmd);
-            try {
-                while (running && currentMode != 0 && AdbClient.get().isConnected()) {
-                    byte[] chunk = ch.readChunk(2000);
-                    if (chunk == null) {
-                        if (!ch.isOpen()) break;
-                        continue;
-                    }
-                    int r = chunk.length;
-                    if (r == 0) {
-                        if (!ch.isOpen()) break;
-                        continue;
-                    }
+            stream = adb.openStream("exec:" + cmd);
+            InputStream in = stream.openInputStream();
+            byte[] chunk = new byte[16384];
 
-                    if (streamLen + r > streamBuf.length) {
-                        streamBuf = Arrays.copyOf(streamBuf, Math.max(streamBuf.length * 2, streamLen + r));
-                    }
-                    System.arraycopy(chunk, 0, streamBuf, streamLen, r);
-                    streamLen += r;
+            while (running && currentMode != 0 && adb.isConnected()) {
+                int r = in.read(chunk);
+                if (r < 0) break;
+                if (r == 0) continue;
 
-                    int offset = 0;
-                    while (true) {
-                        int nalStart = findNalStart(streamBuf, offset, streamLen);
-                        if (nalStart < 0) {
-                            if (offset > 0) {
-                                int rem = streamLen - offset;
-                                System.arraycopy(streamBuf, offset, streamBuf, 0, rem);
-                                streamLen = rem;
-                            }
-                            break;
-                        }
-
-                        int nextNal = findNalStart(streamBuf, nalStart + 3, streamLen);
-                        if (nextNal < 0) {
-                            int rem = streamLen - nalStart;
-                            System.arraycopy(streamBuf, nalStart, streamBuf, 0, rem);
-                            streamLen = rem;
-                            break;
-                        }
-
-                        int frameSize = nextNal - nalStart;
-                        feedCodec(codec, streamBuf, nalStart, frameSize);
-                        drainCodec(codec, info);
-                        offset = nextNal;
-                    }
+                if (streamLen + r > streamBuf.length) {
+                    streamBuf = Arrays.copyOf(streamBuf, Math.max(streamBuf.length * 2, streamLen + r));
                 }
-            } finally {
-                AdbClient.get().closeStream(ch);
+                System.arraycopy(chunk, 0, streamBuf, streamLen, r);
+                streamLen += r;
+
+                int offset = 0;
+                while (true) {
+                    int nalStart = findNalStart(streamBuf, offset, streamLen);
+                    if (nalStart < 0) {
+                        if (offset > 0) {
+                            int rem = streamLen - offset;
+                            System.arraycopy(streamBuf, offset, streamBuf, 0, rem);
+                            streamLen = rem;
+                        }
+                        break;
+                    }
+
+                    int nextNal = findNalStart(streamBuf, nalStart + 3, streamLen);
+                    if (nextNal < 0) {
+                        int rem = streamLen - nalStart;
+                        System.arraycopy(streamBuf, nalStart, streamBuf, 0, rem);
+                        streamLen = rem;
+                        break;
+                    }
+
+                    int frameSize = nextNal - nalStart;
+                    feedCodec(codec, streamBuf, nalStart, frameSize);
+                    drainCodec(codec, info);
+                    offset = nextNal;
+                }
             }
             return true;
         } catch (Exception e) {
             return false;
         } finally {
+            if (stream != null) {
+                try { stream.close(); } catch (Exception ignored) {}
+            }
             if (codec != null) {
                 try {
                     codec.stop();
@@ -654,54 +639,43 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         }
     }
 
-    private void feedCodec(MediaCodec codec, byte[] buf, int offset, int size) {
-        try {
-            int inIndex = codec.dequeueInputBuffer(10000);
-            if (inIndex >= 0) {
-                ByteBuffer inputBuffer;
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    inputBuffer = codec.getInputBuffer(inIndex);
-                } else {
-                    inputBuffer = codec.getInputBuffers()[inIndex];
-                }
-                if (inputBuffer != null) {
-                    inputBuffer.clear();
-                    inputBuffer.put(buf, offset, size);
-                    codec.queueInputBuffer(inIndex, 0, size, System.nanoTime() / 1000, 0);
-                }
-            }
-        } catch (Exception ignored) {}
-    }
-
-    private void drainCodec(MediaCodec codec, MediaCodec.BufferInfo info) {
-        try {
-            int outIndex = codec.dequeueOutputBuffer(info, 10000);
-            while (outIndex >= 0) {
-                codec.releaseOutputBuffer(outIndex, true);
-                outIndex = codec.dequeueOutputBuffer(info, 0);
-            }
-        } catch (Exception ignored) {}
-    }
-
-    private int findNalStart(byte[] data, int start, int length) {
-        for (int i = start; i < length - 3; i++) {
+    private static int findNalStart(byte[] data, int offset, int length) {
+        for (int i = offset; i < length - 3; i++) {
             if (data[i] == 0 && data[i + 1] == 0) {
                 if (data[i + 2] == 1) return i;
-                if (data[i + 2] == 0 && i + 3 < length && data[i + 3] == 1) return i;
+                if (data[i + 2] == 0 && i < length - 4 && data[i + 3] == 1) return i;
             }
         }
         return -1;
     }
 
-    private void vibrate(int ms) {
+    private static void feedCodec(MediaCodec codec, byte[] data, int offset, int size) {
+        int inIndex = codec.dequeueInputBuffer(10000);
+        if (inIndex >= 0) {
+            java.nio.ByteBuffer buf = codec.getInputBuffer(inIndex);
+            if (buf != null) {
+                buf.clear();
+                buf.put(data, offset, size);
+                codec.queueInputBuffer(inIndex, 0, size, System.nanoTime() / 1000L, 0);
+            }
+        }
+    }
+
+    private static void drainCodec(MediaCodec codec, MediaCodec.BufferInfo info) {
+        int outIndex;
+        while ((outIndex = codec.dequeueOutputBuffer(info, 0)) >= 0) {
+            codec.releaseOutputBuffer(outIndex, true);
+        }
+    }
+
+    private void vibrate(long ms) {
         try {
-            Vibrator v = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            Vibrator v = (Vibrator) getSystemService(VIBRATOR_SERVICE);
             if (v != null) v.vibrate(ms);
         } catch (Exception ignored) {}
     }
 
-    private int dp(float v) {
-        return Math.round(TypedValue.applyDimension(
-                TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics()));
+    private int dp(float dpVal) {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dpVal, getResources().getDisplayMetrics());
     }
 }

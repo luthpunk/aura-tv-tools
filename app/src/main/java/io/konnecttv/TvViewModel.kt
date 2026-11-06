@@ -56,20 +56,25 @@ val GLOW_ACCENTS = listOf(
     GlowAccent("Rose", 0xFF6B9A), GlowAccent("Amber", 0xFFB547), GlowAccent("Snow", 0xE8ECF2), GlowAccent("RGB", RGB_GLOW),
 )
 
-val LAUNCHER_STEPS = listOf("Making room on the TV", "Installing Glowlauncher", "Setting it as the home screen", "Adding your apps")
+val LAUNCHER_STEPS = listOf(
+    "Menyiapkan ruang di TV",
+    "Mengunduh & memasang Aura TV Home",
+    "Menjadikan sebagai Beranda Utama",
+    "Membuka Aura TV Home"
+)
 
 data class Tweaks(val animationsOff: Boolean, val screensaverOff: Boolean, val sleepMinutes: Int?, val launcherOn: Boolean)
 
-/** Our clean TV home screen, shipped inside this app's assets. */
-private const val LAUNCHER_PKG = "io.konnecttv.glowlauncher"
-/** The clean launcher older KonnectTV versions downloaded; replaced by Glowlauncher. */
-private const val OLD_LAUNCHER_PKG = "com.ansub.tvhome"
+/** Clean Aura TV Home screen for Android TV. */
+private const val LAUNCHER_PKG = "com.gathin.tvhome"
+/** The clean launcher older KonnectTV versions downloaded; replaced by Aura TV Home. */
+private const val OLD_LAUNCHER_PKG = "io.konnecttv.glowlauncher"
 /** Where our APK sits on the TV while it draws icons; deleted right after. */
 private const val ICON_HELPER = "/data/local/tmp/konnecttv-icons.jar"
-private const val LAUNCHER_ACTIVITY = "$LAUNCHER_PKG/.HomeActivity"
+private const val LAUNCHER_ACTIVITY = "$LAUNCHER_PKG/.MainActivity"
 
-/** Glowlauncher's accessibility service that answers Home on TVs that keep their own home (Google TV). */
-private const val HOME_SERVICE = "$LAUNCHER_PKG/$LAUNCHER_PKG.HomeButtonService"
+/** Aura TV Home service that answers Home on TVs that keep their own home (Google TV / Xiaomi). */
+private const val HOME_SERVICE = "$LAUNCHER_PKG/$LAUNCHER_PKG.HomeKeyService"
 private val HOME_SERVICE_SETTINGS = setOf("secure:enabled_accessibility_services", "secure:accessibility_enabled")
 
 /** The TV's enabled accessibility services with ours added, keeping whatever else was on. */
@@ -79,6 +84,12 @@ internal fun withService(enabled: String, service: String): String =
 private val ANIMATION_KEYS = listOf("window_animation_scale", "transition_animation_scale", "animator_duration_scale")
 
 class TvViewModel(app: Application) : AndroidViewModel(app) {
+    companion object {
+        @Volatile
+        var activeAdb: Adb? = null
+            private set
+    }
+
     private val store = Store(app)
     val debloat = DebloatList.load(app)
     private var adb: Adb? = null
@@ -138,11 +149,13 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         watchdog.cancel()
         pending = null
         result.onSuccess { savedTv ->
+            activeAdb = adb
             saved.value = store.tvs()
             history.value = store.history(savedTv.id)
             _conn.value = Conn.On(savedTv)
             refreshAll()
         }.onFailure { e ->
+            activeAdb = null
             android.util.Log.w("KonnectTV", "connect $host:$port failed", e)
             _conn.value = Conn.Off
             if (!quiet) say(
@@ -175,7 +188,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() = viewModelScope.launch(Dispatchers.IO) {
-        lock.withLock { adb?.runCatching { close() }; adb = null }
+        lock.withLock { adb?.runCatching { close() }; adb = null; activeAdb = null }
         _conn.value = Conn.Off
     }
 
@@ -196,6 +209,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         } catch (e: Exception) {
             if (!a.isConnected) {
                 _conn.value = Conn.Off
+                activeAdb = null
                 say("Lost connection to the TV.")
             } else {
                 say(e.message ?: "Something went wrong.")
@@ -527,45 +541,81 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     private suspend fun installLauncher(a: Adb, homeApps: List<String>, accent: Long) {
         launcherSetup.value = LauncherSetup(0, System.currentTimeMillis())
         try {
-            // Switching home is the heaviest thing a TV does; on 1-2 GB TVs it can stall for minutes
-            // when memory is full. Clear background apps first so the switch has room.
+            // Clear background apps first so TV has enough memory for switching launcher
             a.sh("am kill-all")
             setupStep(1)
-            val file = File(getApplication<Application>().cacheDir, "glowlauncher.apk")
-            getApplication<Application>().assets.open("glowlauncher.apk").use { input -> file.outputStream().use { input.copyTo(it) } }
-            val result = file.inputStream().use { a.install(it, file.length()) }
-            if (!result.startsWith("Success")) error("Install failed: $result")
-            if (history.value.none { it.kind == "install" && it.target == LAUNCHER_PKG }) {
-                record(Change(System.currentTimeMillis(), "install", LAUNCHER_PKG, "Glowlauncher installed"))
-            }
-            // The launcher older versions downloaded: two home screens would fight over Home.
-            history.value.filter { it.kind == "install" && it.target == OLD_LAUNCHER_PKG }.forEach { undoOne(a, it) }
-            setupStep(2)
-            // Older versions turned off whole launcher apps; give them back. Nothing is turned off any more.
-            history.value.filter { it.kind == "home" }.forEach { undoOne(a, it) }
-            // Become home first, then open once with the picked apps: launching it before the switch
-            // meant starting it twice on a TV that's short of memory.
-            a.sh("cmd role add-role-holder --user 0 android.app.role.HOME $LAUNCHER_PKG; cmd package set-home-activity $LAUNCHER_ACTIVITY")
-            if (!isHomeActive(a)) {
-                // The TV ranks its own home above any installed app (Google TV does). Leave it on and
-                // let Glowlauncher's Home button service answer Home instead.
-                val enabled = a.sh("settings get secure enabled_accessibility_services")
-                putSetting(a, "secure", "enabled_accessibility_services", withService(enabled, HOME_SERVICE), "Home button opens Glowlauncher")
-                putSetting(a, "secure", "accessibility_enabled", "1", "Home button opens Glowlauncher")
-                delay(1500)
-                if ("Glowlauncher Home button" !in a.sh("dumpsys accessibility | grep 'Bound services'")) {
-                    undoHomeService(a)
-                    error("The TV didn't start Glowlauncher's Home button service, so Home would still open the TV's own home. Nothing was changed.")
+            val file = File(getApplication<Application>().cacheDir, "aura-tv-home.apk")
+
+            // Download Aura TV Home latest release APK if not cached or small
+            if (!file.exists() || file.length() < 100_000L) {
+                try {
+                    val url = java.net.URL("https://github.com/luthpunk/aura-tv-home/releases/latest/download/aura-tv-home.apk")
+                    var conn = url.openConnection() as java.net.HttpURLConnection
+                    conn.instanceFollowRedirects = true
+                    conn.connectTimeout = 15000
+                    conn.readTimeout = 30000
+                    var status = conn.responseCode
+                    var hops = 0
+                    while ((status == java.net.HttpURLConnection.HTTP_MOVED_TEMP ||
+                            status == java.net.HttpURLConnection.HTTP_MOVED_PERM ||
+                            status == 307 || status == 308) && hops++ < 5) {
+                        val loc = conn.getHeaderField("Location") ?: break
+                        conn = java.net.URL(loc).openConnection() as java.net.HttpURLConnection
+                        conn.connectTimeout = 15000
+                        conn.readTimeout = 30000
+                        status = conn.responseCode
+                    }
+                    if (status == java.net.HttpURLConnection.HTTP_OK) {
+                        conn.inputStream.use { input ->
+                            file.outputStream().use { output -> input.copyTo(output) }
+                        }
+                    }
+                } catch (dlEx: Exception) {
+                    android.util.Log.w("AuraTVTools", "Gagal unduh aura-tv-home.apk online, mencoba aset fallback", dlEx)
                 }
             }
+
+            // Fallback to bundled glowlauncher if aura-tv-home is not available
+            if (!file.exists() || file.length() < 100_000L) {
+                runCatching {
+                    getApplication<Application>().assets.open("glowlauncher.apk").use { input ->
+                        file.outputStream().use { input.copyTo(it) }
+                    }
+                }
+            }
+
+            if (!file.exists() || file.length() < 1000L) {
+                error("Gagal menyiapkan APK Aura TV Home: periksa koneksi internet.")
+            }
+
+            val result = file.inputStream().use { a.install(it, file.length()) }
+            if (!result.startsWith("Success")) error("Install gagal: $result")
+            if (history.value.none { it.kind == "install" && it.target == LAUNCHER_PKG }) {
+                record(Change(System.currentTimeMillis(), "install", LAUNCHER_PKG, "Aura TV Home terpasang"))
+            }
+            history.value.filter { it.kind == "install" && it.target == OLD_LAUNCHER_PKG }.forEach { undoOne(a, it) }
+            setupStep(2)
+            history.value.filter { it.kind == "home" }.forEach { undoOne(a, it) }
+
+            // Set Aura TV Home as default launcher role holder and default activity
+            a.sh("cmd role add-role-holder --user 0 android.app.role.HOME $LAUNCHER_PKG; cmd package set-home-activity $LAUNCHER_ACTIVITY")
+            a.sh("pm grant $LAUNCHER_PKG android.permission.WRITE_SECURE_SETTINGS")
+
+            if (!isHomeActive(a)) {
+                // If TV ranks stock home above third-party launcher (Google TV / Xiaomi), enable Home accessibility service
+                val enabled = a.sh("settings get secure enabled_accessibility_services")
+                putSetting(a, "secure", "enabled_accessibility_services", withService(enabled, HOME_SERVICE), "Tombol Home membuka Aura TV Home")
+                putSetting(a, "secure", "accessibility_enabled", "1", "Tombol Home membuka Aura TV Home")
+            }
+
             setupStep(3)
-            sendHomeApps(a, homeApps, accent)
+            a.sh("am start -n $LAUNCHER_ACTIVITY")
             a.keyevent(io.konnecttv.adb.Key.HOME)
             tweaks.value = readTweaks(a)
             apps.value = readApps(a)
             launcherSetup.update { it?.copy(step = LAUNCHER_STEPS.size, done = true) }
         } catch (e: Exception) {
-            launcherSetup.update { it?.copy(error = e.message ?: "Something went wrong.") }
+            launcherSetup.update { it?.copy(error = e.message ?: "Terjadi kesalahan.") }
             throw e
         }
     }
@@ -580,7 +630,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         a.sh("pm uninstall $LAUNCHER_PKG")
         tweaks.value = readTweaks(a)
         apps.value = readApps(a)
-        say("TV's own home screen is back.")
+        say("Beranda bawaan TV telah dipulihkan.")
     }
 
     override fun onCleared() {

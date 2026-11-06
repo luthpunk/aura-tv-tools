@@ -95,6 +95,38 @@ class Adb(context: Context) : AbsAdbConnectionManager() {
         }
     }
 
+    /** Captures a live PNG screenshot from the STB and decodes it into a Bitmap. */
+    fun captureScreenshot(inSampleSize: Int = 1): android.graphics.Bitmap? {
+        return try {
+            openStream("exec:screencap -p").use { stream ->
+                val input = stream.openInputStream()
+                val baos = java.io.ByteArrayOutputStream()
+                val buf = ByteArray(16384)
+                while (true) {
+                    val n = try { input.read(buf) } catch (_: Exception) { -1 }
+                    if (n < 0) break
+                    baos.write(buf, 0, n)
+                    val len = baos.size()
+                    if (len >= 8) {
+                        val b = baos.toByteArray()
+                        if (b[len - 8] == 0x49.toByte() && b[len - 7] == 0x45.toByte() &&
+                            b[len - 6] == 0x4e.toByte() && b[len - 5] == 0x44.toByte()) {
+                            break
+                        }
+                    }
+                }
+                val arr = baos.toByteArray()
+                if (arr.isEmpty()) return null
+                val opts = android.graphics.BitmapFactory.Options().apply {
+                    if (inSampleSize > 1) this.inSampleSize = inSampleSize
+                }
+                android.graphics.BitmapFactory.decodeByteArray(arr, 0, arr.size, opts)
+            }
+        } catch (_: Exception) {
+            null
+        }
+    }
+
     override fun close() {
         keyShell?.runCatching { close() }
         keyShell = null
