@@ -264,13 +264,6 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         row2.addView(createSmallRemoteBtn("Vol +", KeyEvent.KEYCODE_VOLUME_UP), gridSmallLp());
         sidebar.addView(row2, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
-        LinearLayout row3 = new LinearLayout(this);
-        row3.setOrientation(LinearLayout.HORIZONTAL);
-        TextView powerBtn = createSmallRemoteBtn("⏻ Power", KeyEvent.KEYCODE_POWER);
-        powerBtn.setTextColor(COLOR_DANGER);
-        row3.addView(powerBtn, gridSmallLp());
-        sidebar.addView(row3, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-
         sidebarScroll.addView(sidebar);
         root.addView(sidebarScroll);
 

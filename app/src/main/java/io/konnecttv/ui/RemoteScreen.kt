@@ -57,9 +57,9 @@ fun RemoteScreen(vm: TvViewModel, tv: SavedTv) {
             DPad(::press)
             Spacer(Modifier.height(8.dp))
             KeyRow {
-                RemoteKey("Back", Modifier.weight(1f), { Glyph(Glyphs.Back) }) { press(Key.BACK) }
+                RemoteKey("Kembali", Modifier.weight(1f), { Glyph(Glyphs.Back) }) { press(Key.BACK) }
                 RemoteKey("Home", Modifier.weight(1f), { Glyph(Glyphs.Home) }) { press(Key.HOME) }
-                RemoteKey("Type", Modifier.weight(1f), { Glyph(Glyphs.Keyboard) }) { typing = true }
+                RemoteKey("Ketik", Modifier.weight(1f), { Glyph(Glyphs.Keyboard) }) { typing = true }
             }
             KeyRow {
                 RemoteKey("Vol −", Modifier.weight(1f), { Glyph(Glyphs.VolumeDown) }) { press(Key.VOL_DOWN) }
@@ -68,9 +68,9 @@ fun RemoteScreen(vm: TvViewModel, tv: SavedTv) {
                 RemoteKey("Power", Modifier.weight(1f), { PowerIcon(C.Danger, Modifier.size(20.dp)) }) { press(Key.POWER) }
             }
             KeyRow {
-                RemoteKey("Play / Pause", Modifier.weight(2f), { Glyph(Glyphs.PlayPause) }) { press(Key.PLAY_PAUSE) }
+                RemoteKey("Putar / Jeda", Modifier.weight(2f), { Glyph(Glyphs.PlayPause) }) { press(Key.PLAY_PAUSE) }
                 RemoteKey("Menu", Modifier.weight(1f), { Glyph(Glyphs.Menu) }) { press(Key.MENU) }
-                RemoteKey("Settings", Modifier.weight(1f), { Glyph(Glyphs.Settings) }) { press(Key.SETTINGS) }
+                RemoteKey("Setelan", Modifier.weight(1f), { Glyph(Glyphs.Settings) }) { press(Key.SETTINGS) }
             }
             Spacer(Modifier.height(4.dp))
             MirroringRow(tv)
@@ -79,21 +79,21 @@ fun RemoteScreen(vm: TvViewModel, tv: SavedTv) {
 
         GlassSheet(typing, onDismiss = { typing = false }) {
             var text by remember { mutableStateOf("") }
-            Text("Type on TV", style = Body.copy(fontSize = 17.sp))
-            Text("Select a search box on the TV first.", style = Small)
-            Field(text, { text = it }, "Text to send")
+            Text("Ketik di TV", style = Body.copy(fontSize = 17.sp))
+            Text("Pilih kolom input / pencarian di TV terlebih dahulu.", style = Small)
+            Field(text, { text = it }, "Teks untuk dikirim")
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("⌫ Delete", Modifier.weight(1f)) { vm.key(Key.DEL) }
-                PrimaryButton("Send", Modifier.weight(1f), enabled = text.isNotEmpty()) { vm.type(text); text = "" }
+                SecondaryButton("⌫ Hapus", Modifier.weight(1f)) { vm.key(Key.DEL) }
+                PrimaryButton("Kirim", Modifier.weight(1f), enabled = text.isNotEmpty()) { vm.type(text); text = "" }
             }
         }
 
         GlassSheet(menu, onDismiss = { menu = false }) {
             Text(tv.name, style = Body.copy(fontSize = 17.sp))
             Text("${tv.host}:${tv.port}", style = Small)
-            SecondaryButton("Refresh everything") { vm.refreshAll(); menu = false }
-            SecondaryButton("Switch TV") { vm.disconnect(); menu = false }
-            SecondaryButton("Forget this TV", color = C.Danger) { vm.forget(tv.id); menu = false }
+            SecondaryButton("Segarkan semua") { vm.refreshAll(); menu = false }
+            SecondaryButton("Ganti TV") { vm.disconnect(); menu = false }
+            SecondaryButton("Lupakan TV ini", color = C.Danger) { vm.forget(tv.id); menu = false }
             Text("Aura TV Tools · github.com/luthpunk/aura-tv-tools", style = Small)
         }
     }
@@ -192,7 +192,7 @@ private fun MirroringRow(tv: SavedTv) {
                     .border(1.dp, C.RaisedBorder, CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("📺", fontSize = 20.sp)
+                Glyph(Glyphs.Tv, C.Accent, 22.dp)
             }
             Spacer(Modifier.width(14.dp))
             Column {

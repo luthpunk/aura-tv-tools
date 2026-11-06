@@ -60,6 +60,7 @@ object Glyphs {
     )
     /** Points down; rotate for the other directions. */
     val Chevron = glyph("M7.41,8.59L12,13.17l4.59,-4.58L18,10l-6,6 -6,-6 1.41,-1.41z")
+    val Tv = glyph("M21,3H3c-1.1,0 -2,0.9 -2,2v12c0,1.1 0.9,2 2,2h5v2h8v-2h5c1.1,0 2,-0.9 2,-2V5c0,-1.1 -0.9,-2 -2,-2zM21,17H3V5h18v12z")
 }
 
 private fun glyph(path: String, evenOdd: Boolean = false) = ImageVector.Builder(defaultWidth = 24.dp, defaultHeight = 24.dp, viewportWidth = 24f, viewportHeight = 24f)

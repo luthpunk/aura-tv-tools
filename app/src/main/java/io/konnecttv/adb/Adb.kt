@@ -34,7 +34,7 @@ class Adb(context: Context) : AbsAdbConnectionManager() {
     init {
         // adbd on Android 11+ speaks the newest protocol; older TVs negotiate down.
         setApi(30)
-        setTimeout(30, TimeUnit.SECONDS)
+        setTimeout(8, TimeUnit.SECONDS)
         if (keyFile.exists() && certFile.exists()) {
             privateKey = KeyFactory.getInstance("RSA").generatePrivate(PKCS8EncodedKeySpec(keyFile.readBytes()))
             certificate = certFile.inputStream().use { CertificateFactory.getInstance("X.509").generateCertificate(it) }

@@ -329,7 +329,7 @@ fun BoxScope.SheetOverlay(host: SheetHost) {
 
 // ---------- tab icons, drawn so the app needs no icon library ----------
 
-enum class Tab(val title: String) { Remote("Remote"), Apps("Apps"), Detox("Detox"), Boost("Boost") }
+enum class Tab(val title: String) { Remote("Remote"), Apps("Aplikasi"), Detox("Detox"), Boost("Boost") }
 
 @Composable
 fun TabIcon(tab: Tab, color: Color, modifier: Modifier = Modifier.size(22.dp)) = Canvas(modifier) {

@@ -58,7 +58,7 @@ fun DetoxScreen(vm: TvViewModel) {
                 Row(Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text("Detox", style = H1, modifier = Modifier.weight(1f))
                     Text(
-                        "⟲ History${if (history.isNotEmpty()) " · ${history.size}" else ""}",
+                        "⟲ Riwayat${if (history.isNotEmpty()) " · ${history.size}" else ""}",
                         style = Small.copy(fontSize = 13.sp, color = if (history.isNotEmpty()) C.Accent else C.Muted),
                         modifier = Modifier.clip(CircleShape).clickable { showHistory = true }.padding(10.dp),
                     )
@@ -67,15 +67,15 @@ fun DetoxScreen(vm: TvViewModel) {
             item {
                 Card {
                     Text(
-                        if (safe.isEmpty()) "Nothing left to clean" else "${safe.size} apps safe to turn off",
+                        if (safe.isEmpty()) "Semua sudah bersih" else "${safe.size} aplikasi aman dinonaktifkan",
                         style = Body.copy(color = C.Accent, fontWeight = FontWeight.SemiBold, fontSize = 16.sp),
                     )
                     Spacer(Modifier.height(2.dp))
-                    Text("Turned off, never deleted. Undo anytime.", style = Small)
+                    Text("Hanya dinonaktifkan, tidak dihapus permanen. Bisa dipulihkan kapan saja.", style = Small)
                 }
             }
 
-            if (safe.isNotEmpty()) item { Text("SAFE TO TURN OFF · ${safe.size}", style = Section, modifier = Modifier.padding(top = 8.dp)) }
+            if (safe.isNotEmpty()) item { Text("AMAN DINONAKTIFKAN · ${safe.size}", style = Section, modifier = Modifier.padding(top = 8.dp)) }
             items(safe, key = { it.pkg }) { app ->
                 val entry = vm.debloat.safe[app.pkg]
                 val on = app.pkg in ticked
@@ -93,8 +93,8 @@ fun DetoxScreen(vm: TvViewModel) {
 
             item {
                 Row(Modifier.fillMaxWidth().clickable { showNeeded = !showNeeded }.padding(top = 10.dp, bottom = 2.dp)) {
-                    Text("NEEDED BY TV · ${needed.size} · LOCKED", style = Section, modifier = Modifier.weight(1f))
-                    Text(if (showNeeded) "Hide" else "Show", style = Section.copy(color = C.Accent))
+                    Text("DIBUTUHKAN SISTEM TV · ${needed.size} · TERKUNCI", style = Section, modifier = Modifier.weight(1f))
+                    Text(if (showNeeded) "Sembunyikan" else "Tampilkan", style = Section.copy(color = C.Accent))
                 }
             }
             if (showNeeded) items(needed, key = { "n" + it.pkg }) { app ->
@@ -109,13 +109,13 @@ fun DetoxScreen(vm: TvViewModel) {
                     }
                 }
             }
-            item { Text("YOUR APPS · ${mine.size} · KEPT", style = Section, modifier = Modifier.padding(top = 10.dp)) }
-            item { Text(mine.joinToString(" · ") { it.label }.ifEmpty { "None" }, style = Small) }
+            item { Text("APLIKASI ANDA · ${mine.size} · DIPERTAHANKAN", style = Section, modifier = Modifier.padding(top = 10.dp)) }
+            item { Text(mine.joinToString(" · ") { it.label }.ifEmpty { "Tidak ada" }, style = Small) }
 
             item { Spacer(Modifier.height(8.dp)) }
             item {
                 PrimaryButton(
-                    if (ticked.isEmpty()) "Tick apps to turn off" else "Turn off ${ticked.size} apps",
+                    if (ticked.isEmpty()) "Pilih aplikasi untuk dinonaktifkan" else "Nonaktifkan ${ticked.size} aplikasi",
                     enabled = ticked.isNotEmpty(),
                 ) { vm.turnOff(ticked.toList()) }
             }
@@ -123,8 +123,8 @@ fun DetoxScreen(vm: TvViewModel) {
         }
 
         GlassSheet(showHistory, onDismiss = { showHistory = false }) {
-            Text("Undo history", style = Body.copy(fontSize = 17.sp))
-            if (history.isEmpty()) Text("No changes yet.", style = Small)
+            Text("Riwayat Perubahan", style = Body.copy(fontSize = 17.sp))
+            if (history.isEmpty()) Text("Belum ada riwayat perubahan.", style = Small)
             LazyColumn(Modifier.heightIn(max = 380.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(history, key = { "${it.time}${it.target}" }) { change ->
                     Card {
@@ -132,19 +132,19 @@ fun DetoxScreen(vm: TvViewModel) {
                             Column(Modifier.weight(1f)) {
                                 Text(
                                     when (change.kind) {
-                                        "disable" -> "${change.label} turned off"
+                                        "disable" -> "${change.label} dinonaktifkan"
                                         else -> change.label
                                     },
                                     style = Body,
                                 )
                                 Text(DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(change.time)), style = Small)
                             }
-                            Text("Undo", style = Body.copy(color = C.Accent), modifier = Modifier.clip(CircleShape).clickable { vm.undo(change) }.padding(8.dp))
+                            Text("Pulihkan", style = Body.copy(color = C.Accent), modifier = Modifier.clip(CircleShape).clickable { vm.undo(change) }.padding(8.dp))
                         }
                     }
                 }
             }
-            if (history.isNotEmpty()) SecondaryButton("Undo everything") { vm.undoAll(); showHistory = false }
+            if (history.isNotEmpty()) SecondaryButton("Pulihkan semua perubahan") { vm.undoAll(); showHistory = false }
         }
     }
 

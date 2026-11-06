@@ -90,37 +90,37 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 val m = mem
                 StatCard("RAM", m?.freeKb, m?.totalKb, Modifier.weight(1f))
-                StatCard("Storage", m?.storageFreeKb, m?.storageTotalKb, Modifier.weight(1f))
+                StatCard("Penyimpanan", m?.storageFreeKb, m?.storageTotalKb, Modifier.weight(1f))
             }
-            tv.ramBefore?.let { Text("RAM free before KonnectTV: ${gb(it)}", style = Small, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
+            tv.ramBefore?.let { Text("RAM bebas sebelum optimasi: ${gb(it)}", style = Small, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
 
             LauncherOrb(launcherOn, busy, tv.name) {
                 if (launcherOn) launcherMenu = true else { vm.loadHomeChoices(); pickHome = true }
             }
 
             val t = tweaks
-            TweakRow("Animations off", "Menus open instantly", t?.animationsOff == true) { vm.setAnimationsOff(it) }
-            TweakRow("Screensaver off", "No background work while idle", t?.screensaverOff == true) { vm.setScreensaverOff(it) }
+            TweakRow("Matikan animasi", "Menu & jendela terbuka instan tanpa jeda", t?.animationsOff == true) { vm.setAnimationsOff(it) }
+            TweakRow("Matikan screensaver", "Menghemat daya & sistem saat TV diam", t?.screensaverOff == true) { vm.setScreensaverOff(it) }
             Card(onClick = { pickSleep = true }) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
-                        Text("Sleep after", style = Body)
-                        Text("TV turns off when nobody uses it", style = Small)
+                        Text("Waktu tidur otomatis", style = Body)
+                        Text("TV mati otomatis saat tidak digunakan", style = Small)
                     }
                     // Android stores "never" as Integer.MAX_VALUE ms, about 35791 minutes.
-                    val sleep = t?.sleepMinutes?.let { if (it > 24 * 60) "Never" else "$it min" }
+                    val sleep = t?.sleepMinutes?.let { if (it > 24 * 60) "Jangan pernah" else "$it mnt" }
                     Text(sleep?.let { "$it ›" } ?: "›", style = Body.copy(color = C.Accent))
                 }
             }
             Spacer(Modifier.height(4.dp))
-            SecondaryButton(if (busy) "Working…" else "Kill background apps + free cache") { vm.killBackground() }
+            SecondaryButton(if (busy) "Memproses…" else "Tutup aplikasi latar & bersihkan cache") { vm.killBackground() }
             Spacer(Modifier.height(TabBarClearance))
         }
 
         GlassSheet(pickSleep, onDismiss = { pickSleep = false }) {
-            Text("Sleep after", style = Body.copy(fontSize = 17.sp))
+            Text("Waktu tidur otomatis", style = Body.copy(fontSize = 17.sp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SleepChoices.forEach { m -> Chip("$m min", tweaks?.sleepMinutes == m) { vm.setSleep(m); pickSleep = false } }
+                SleepChoices.forEach { m -> Chip("$m menit", tweaks?.sleepMinutes == m) { vm.setSleep(m); pickSleep = false } }
             }
         }
 

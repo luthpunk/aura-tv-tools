@@ -35,7 +35,7 @@ import io.konnecttv.TabBarClearance
 import io.konnecttv.TvViewModel
 import io.konnecttv.data.TvApp
 
-private enum class Filter(val title: String) { Mine("Installed"), System("System"), Off("Disabled") }
+private enum class Filter(val title: String) { Mine("Terpasang"), System("Sistem"), Off("Dinonaktifkan") }
 
 @Composable
 fun AppsScreen(vm: TvViewModel) {
@@ -58,12 +58,12 @@ fun AppsScreen(vm: TvViewModel) {
         LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Row(Modifier.padding(top = 20.dp, bottom = 4.dp), verticalAlignment = Alignment.Bottom) {
-                    Text("Apps", style = H1)
+                    Text("Aplikasi", style = H1)
                     Spacer(Modifier.width(8.dp))
                     Text("${apps.size}", style = Small.copy(fontSize = 14.sp), modifier = Modifier.padding(bottom = 3.dp))
                 }
             }
-            item { Field(query, { query = it }, "Search apps") }
+            item { Field(query, { query = it }, "Cari aplikasi…") }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 4.dp)) {
                     Filter.entries.forEach { f -> Chip(f.title, f == filter) { filter = f } }
@@ -76,15 +76,15 @@ fun AppsScreen(vm: TvViewModel) {
                         Spacer(Modifier.width(12.dp))
                         Column(Modifier.weight(1f)) {
                             Text(app.label, style = Body.copy(color = if (app.disabled) C.Muted else C.Text))
-                            Text(app.pkg + if (app.disabled) " · off" else "", style = Small, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(app.pkg + if (app.disabled) " · nonaktif" else "", style = Small, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                         Text("⋯", style = Body.copy(color = C.Muted, fontSize = 18.sp))
                     }
                 }
             }
-            if (shown.isEmpty()) item { Text("Nothing here.", style = Small, modifier = Modifier.padding(8.dp)) }
+            if (shown.isEmpty()) item { Text("Tidak ada aplikasi.", style = Small, modifier = Modifier.padding(8.dp)) }
             item { Spacer(Modifier.height(4.dp)) }
-            item { SecondaryButton("＋ Install APK from phone") { pickApk.launch(arrayOf("application/vnd.android.package-archive")) } }
+            item { SecondaryButton("＋ Pasang APK dari ponsel") { pickApk.launch(arrayOf("application/vnd.android.package-archive")) } }
             item { Spacer(Modifier.height(TabBarClearance)) }
         }
 
@@ -104,17 +104,17 @@ fun AppsScreen(vm: TvViewModel) {
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                SecondaryButton("Open", Modifier.weight(1f)) { vm.launch(app.pkg); selected = null }
-                SecondaryButton("Force stop", Modifier.weight(1f)) { vm.forceStop(app.pkg); selected = null }
+                SecondaryButton("Buka", Modifier.weight(1f)) { vm.launch(app.pkg); selected = null }
+                SecondaryButton("Paksa henti", Modifier.weight(1f)) { vm.forceStop(app.pkg); selected = null }
             }
-            SecondaryButton(if (armed == "clear") "Tap again: erase all its data" else "Clear data") { confirm("clear") { vm.clearData(app.pkg) } }
+            SecondaryButton(if (armed == "clear") "Ketuk lagi: hapus semua data" else "Hapus data") { confirm("clear") { vm.clearData(app.pkg) } }
             when {
-                app.disabled -> PrimaryButton("Turn back on") { vm.setDisabled(app, false); selected = null }
-                vm.debloat.isProtected(app.pkg) -> Text("Needed by the TV. KonnectTV won't turn this off.", style = Small)
-                else -> SecondaryButton("Turn off (undo anytime)") { vm.setDisabled(app, true); selected = null }
+                app.disabled -> PrimaryButton("Aktifkan kembali") { vm.setDisabled(app, false); selected = null }
+                vm.debloat.isProtected(app.pkg) -> Text("Dibutuhkan oleh sistem TV. Aplikasi ini dilindungi.", style = Small)
+                else -> SecondaryButton("Nonaktifkan (bisa dipulihkan)") { vm.setDisabled(app, true); selected = null }
             }
             if (!app.system) {
-                SecondaryButton(if (armed == "rm") "Tap again to uninstall" else "Uninstall", color = C.Danger) { confirm("rm") { vm.uninstall(app) } }
+                SecondaryButton(if (armed == "rm") "Ketuk lagi untuk copot" else "Copot pemasangan", color = C.Danger) { confirm("rm") { vm.uninstall(app) } }
             }
         }
     }

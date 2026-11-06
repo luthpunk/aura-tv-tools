@@ -128,15 +128,16 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun connect(host: String, port: Int, name: String? = null, quiet: Boolean = false) = viewModelScope.launch {
-        _conn.value = Conn.Busy(if (quiet) "Reconnecting…" else "Connecting… If the TV asks \"Allow debugging?\", tick Always allow and press Allow.")
+        cancelConnect()
+        _conn.value = Conn.Busy(if (quiet) "Menghubungkan ulang…" else "Menghubungkan… Jika TV menampilkan \"Izinkan debugging?\", centang Selalu izinkan dan pilih Izinkan.")
         // adbd waits for the Allow tap with no timeout of its own.
-        val watchdog = launch { kotlinx.coroutines.delay(if (quiet) 8_000 else 45_000); cancelConnect() }
+        val watchdog = launch { kotlinx.coroutines.delay(if (quiet) 6_000 else 30_000); cancelConnect() }
         val result = withContext(Dispatchers.IO) {
             lock.withLock {
                 runCatching {
                     adb?.runCatching { close() }
                     val a = Adb(getApplication()).also { pending = it }
-                    if (!a.connect(host, port)) error("The TV refused the connection.")
+                    if (!a.connect(host, port)) error("Koneksi ditolak oleh TV.")
                     android.util.Log.i("KonnectTV", "adb connected $host:$port")
                     adb = a
                     val id = a.sh("getprop ro.serialno").ifBlank { a.sh("settings get secure android_id") }.ifBlank { host }
@@ -160,8 +161,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             _conn.value = Conn.Off
             if (!quiet) say(
                 when (e) {
-                    is AdbPairingRequiredException -> "This TV uses Wireless debugging. Pair with the code first."
-                    else -> "Can't reach $host:$port. Check the TV is on, on this Wi-Fi, and debugging is turned on."
+                    is AdbPairingRequiredException -> "TV ini menggunakan Debugging Nirkabel. Silakan pairing dengan kode terlebih dahulu."
+                    else -> "Tidak dapat menjangkau $host:$port. Pastikan TV menyala, di Wi-Fi yang sama, dan USB debugging aktif."
                 }
             )
         }
@@ -169,13 +170,13 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Wireless debugging: pair with the 6-digit code, then connect on the TLS port. */
     fun pair(host: String, pairPort: Int, code: String, name: String?) = viewModelScope.launch {
-        _conn.value = Conn.Busy("Pairing…")
+        _conn.value = Conn.Busy("Memproses pairing…")
         val ok = withContext(Dispatchers.IO) {
             runCatching { Adb(getApplication()).use { it.pair(host, pairPort, code) } }.getOrDefault(false)
         }
         if (!ok) {
             _conn.value = Conn.Off
-            say("Pairing failed. Check the code on the TV and try again.")
+            say("Pairing gagal. Periksa kembali kode pada TV dan coba lagi.")
             return@launch
         }
         // The TLS connect port is announced over mDNS; give it a few seconds to show up.
@@ -184,7 +185,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             kotlinx.coroutines.delay(500)
         }
         _conn.value = Conn.Off
-        say("Paired. Now tap the TV again, or enter the IP and port shown under Wireless debugging.")
+        say("Pairing berhasil. Silakan ketuk TV lagi untuk menghubungkan.")
     }
 
     fun disconnect() = viewModelScope.launch(Dispatchers.IO) {
@@ -202,7 +203,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Runs TV work off the main thread; any failure becomes a message, a dropped link goes back to Connect. */
     private fun work(block: suspend (Adb) -> Unit) = viewModelScope.launch {
-        val a = adb ?: return@launch say("Not connected.")
+        val a = adb ?: return@launch say("Belum terhubung ke TV.")
         busy.value = true
         try {
             withContext(Dispatchers.IO) { block(a) }
@@ -210,9 +211,14 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             if (!a.isConnected) {
                 _conn.value = Conn.Off
                 activeAdb = null
-                say("Lost connection to the TV.")
+                say("Koneksi ke TV terputus.")
             } else {
-                say(e.message ?: "Something went wrong.")
+                say(e.message ?: "Terjadi kesalahan.")
+            }
+        } finally {
+            busy.value = false
+        }
+    }
             }
         } finally {
             busy.value = false
@@ -487,7 +493,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         val before = readMemory(a).freeKb
         a.sh("am kill-all; pm trim-caches 999G")
         memory.value = readMemory(a)
-        say("Freed ${((memory.value!!.freeKb - before).coerceAtLeast(0)) / 1024} MB.")
+        say("Berhasil melegakan ${((memory.value!!.freeKb - before).coerceAtLeast(0)) / 1024} MB RAM.")
     }
 
     fun setLauncher(on: Boolean, homeApps: List<String> = emptyList(), accent: Long = GLOW_ACCENTS.first().rgb) =
@@ -509,7 +515,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     fun setHomeApps(homeApps: List<String>, accent: Long) = work { a ->
         sendHomeApps(a, homeApps, accent)
         a.keyevent(io.konnecttv.adb.Key.HOME)
-        say("Home screen updated.")
+        say("Beranda TV berhasil diperbarui.")
     }
 
     private val prefs = app.getSharedPreferences("konnecttv", 0)

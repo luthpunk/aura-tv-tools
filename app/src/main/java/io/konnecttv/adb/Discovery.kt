@@ -158,8 +158,7 @@ fun discoverTvs(context: Context): Flow<List<FoundTv>> = callbackFlow {
                             s.connect(InetSocketAddress(candidate, 5555), 320)
                             synchronized(tvs) {
                                 val old = tvs[candidate]
-                                tvs[candidate] = old?.copy(tlsPort = old.tlsPort ?: 5555)
-                                    ?: FoundTv(host = candidate, name = "Android TV ($candidate)", tlsPort = 5555)
+                                tvs[candidate] = old ?: FoundTv(host = candidate, name = "Android TV ($candidate)")
                                 trySend(tvs.values.toList())
                             }
                         }

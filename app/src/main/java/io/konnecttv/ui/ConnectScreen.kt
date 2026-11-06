@@ -58,7 +58,7 @@ fun ConnectScreen(vm: TvViewModel, busyText: String?) {
             Modifier.fillMaxSize().padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            item { Text("Connect a TV", style = H1, modifier = Modifier.padding(top = 20.dp, bottom = 6.dp)) }
+            item { Text("Hubungkan TV", style = H1, modifier = Modifier.padding(top = 20.dp, bottom = 6.dp)) }
 
             if (busyText != null) item {
                 Card {
@@ -66,13 +66,13 @@ fun ConnectScreen(vm: TvViewModel, busyText: String?) {
                         CircularProgressIndicator(Modifier.size(20.dp), color = C.Accent, strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
                         Text(busyText, style = Body, modifier = Modifier.weight(1f))
-                        Text("Cancel", style = Small.copy(color = C.Accent), modifier = Modifier.clickable { vm.cancelConnect() }.padding(8.dp))
+                        Text("Batal", style = Small.copy(color = C.Accent), modifier = Modifier.clickable { vm.cancelConnect() }.padding(8.dp))
                     }
                 }
             }
 
             if (saved.isNotEmpty()) {
-                item { Text("YOUR TVS", style = Section, modifier = Modifier.padding(top = 8.dp)) }
+                item { Text("TV ANDA", style = Section, modifier = Modifier.padding(top = 8.dp)) }
                 items(saved, key = { "s" + it.id }) { tv ->
                     // A TV on wireless debugging gets a new port after each reboot; mDNS knows the current one.
                     val live = found.firstOrNull { it.host == tv.host }
@@ -82,22 +82,22 @@ fun ConnectScreen(vm: TvViewModel, busyText: String?) {
                             Spacer(Modifier.width(12.dp))
                             Column(Modifier.weight(1f)) {
                                 Text(tv.name, style = Body)
-                                Text("${tv.host} · ${if (live != null) "on Wi-Fi now" else "last seen"}", style = Small)
+                                Text("${tv.host} · ${if (live != null) "aktif di Wi-Fi" else "terakhir dilihat"}", style = Small)
                             }
-                            Text("Forget", style = Small, modifier = Modifier.clickable { vm.forget(tv.id) }.padding(8.dp))
+                            Text("Hapus", style = Small, modifier = Modifier.clickable { vm.forget(tv.id) }.padding(8.dp))
                         }
                     }
                 }
             }
 
-            item { Text("FOUND ON YOUR WI-FI", style = Section, modifier = Modifier.padding(top = 8.dp)) }
+            item { Text("DITEMUKAN DI WI-FI", style = Section, modifier = Modifier.padding(top = 8.dp)) }
             val fresh = found.filter { f -> saved.none { it.host == f.host } }
             if (fresh.isEmpty()) item {
                 Card {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(Modifier.size(16.dp), color = C.Muted, strokeWidth = 2.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text("Looking for Android TVs…", style = Small)
+                        Text("Mencari Android TV / STB…", style = Small)
                     }
                 }
             }
@@ -110,25 +110,25 @@ fun ConnectScreen(vm: TvViewModel, busyText: String?) {
                             Text(tv.name, style = Body)
                             Text(
                                 "${tv.host} · " + when {
-                                    tv.pairPort != null -> "ready to pair"
-                                    tv.tlsPort != null -> "wireless debugging on"
-                                    else -> "tries network debugging"
+                                    tv.pairPort != null -> "siap pairing"
+                                    tv.tlsPort != null -> "debugging nirkabel aktif"
+                                    else -> "port 5555 siap"
                                 },
                                 style = Small,
                             )
                         }
-                        Text(if (tv.pairPort != null) "Pair" else "Connect", style = Body.copy(color = C.Accent))
+                        Text(if (tv.pairPort != null) "Pairing" else "Hubungkan", style = Body.copy(color = C.Accent))
                     }
                 }
             }
 
             item { Spacer(Modifier.height(4.dp)) }
-            item { SecondaryButton("Enter IP address manually") { manual = true } }
+            item { SecondaryButton("Masukkan alamat IP manual") { manual = true } }
             item {
                 Text(
-                    "First time? On the TV: Settings › Device Preferences › About › tap Build 7 times. " +
-                        "Then in Developer options turn on USB debugging (and Wireless debugging if you see it). " +
-                        "For pairing, open Wireless debugging › Pair device with pairing code.",
+                    "Pertama kali? Di TV: Pengaturan › Preferensi Perangkat › Tentang › ketuk Build 7 kali. " +
+                        "Lalu di Opsi Pengembang aktifkan USB debugging (dan Debugging nirkabel jika ada). " +
+                        "Untuk pairing, buka Debugging nirkabel › Sandingkan perangkat dengan kode.",
                     style = Small,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -140,11 +140,11 @@ fun ConnectScreen(vm: TvViewModel, busyText: String?) {
             val target = pairing ?: return@GlassSheet
             var code by remember(target) { mutableStateOf("") }
             var port by remember(target) { mutableStateOf(target.pairPort?.toString().orEmpty()) }
-            Text("Pair with ${target.name ?: target.host}", style = Body.copy(fontSize = 17.sp))
-            Text("On the TV: Developer options › Wireless debugging › Pair device with pairing code.", style = Small)
-            if (target.pairPort == null) Field(port, { port = it.filter(Char::isDigit) }, "Pairing port (shown on TV)", KeyboardType.Number)
+            Text("Pairing dengan ${target.name ?: target.host}", style = Body.copy(fontSize = 17.sp))
+            Text("Di TV: Opsi Pengembang › Debugging nirkabel › Sandingkan perangkat dengan kode.", style = Small)
+            if (target.pairPort == null) Field(port, { port = it.filter(Char::isDigit) }, "Port pairing (tampil di TV)", KeyboardType.Number)
             CodeBoxes(code) { code = it.filter(Char::isDigit).take(6) }
-            PrimaryButton("Pair", enabled = code.length == 6 && port.isNotEmpty()) {
+            PrimaryButton("Hubungkan Pairing", enabled = code.length == 6 && port.isNotEmpty()) {
                 vm.pair(target.host, port.toInt(), code, target.name)
                 pairing = null
             }
@@ -153,16 +153,16 @@ fun ConnectScreen(vm: TvViewModel, busyText: String?) {
         GlassSheet(manual, onDismiss = { manual = false }) {
             var host by remember { mutableStateOf("") }
             var port by remember { mutableStateOf("5555") }
-            Text("Connect by IP", style = Body.copy(fontSize = 17.sp))
-            Text("Find the IP on the TV: Settings › Network › your Wi-Fi.", style = Small)
-            Field(host, { host = it.trim() }, "TV IP, e.g. 192.168.1.24", KeyboardType.Uri)
-            Field(port, { port = it.filter(Char::isDigit) }, "Port (5555, or the one under Wireless debugging)", KeyboardType.Number)
-            PrimaryButton("Connect", enabled = host.isNotEmpty() && port.isNotEmpty()) {
+            Text("Hubungkan dengan IP", style = Body.copy(fontSize = 17.sp))
+            Text("Cek IP di TV: Pengaturan › Jaringan › Wi-Fi Anda.", style = Small)
+            Field(host, { host = it.trim() }, "IP TV, contoh: 192.168.1.6", KeyboardType.Uri)
+            Field(port, { port = it.filter(Char::isDigit) }, "Port (default 5555)", KeyboardType.Number)
+            PrimaryButton("Hubungkan", enabled = host.isNotEmpty() && port.isNotEmpty()) {
                 vm.connect(host, port.toInt())
                 manual = false
             }
-            SecondaryButton("Pair with code instead") {
-                if (host.isNotEmpty()) { pairing = PairTarget(host, null, null); manual = false } else vm.say("Enter the TV IP first.")
+            SecondaryButton("Pairing dengan kode saja") {
+                if (host.isNotEmpty()) { pairing = PairTarget(host, null, null); manual = false } else vm.say("Masukkan IP TV terlebih dahulu.")
             }
         }
     }
