@@ -1,117 +1,102 @@
-<p align="center"><img src=".github/assets/icon.png" width="112" alt="KonnectTV logo"></p>
-
-<h1 align="center">KonnectTV</h1>
-
-<p align="center"><img src=".github/assets/poster.png" alt="KonnectTV: make your old TV feel new again"></p>
-
-**Make your old Android TV feel new again, from your phone.** Turn off the bloat, free up memory, swap the cluttered home screen for a clean glowing one, and control everything with a remote on your phone.
-
-<p align="center"><img src=".github/assets/glowlauncher.gif" width="720" alt="Glowlauncher on a TV: a big clock and a dock of apps with a glow that fades through colours as focus moves"></p>
+# Aura TV Tools
 
 <p align="center">
-  <img src=".github/assets/remote.jpg" width="180" alt="KonnectTV remote with d-pad and symbol buttons">
-  <img src=".github/assets/apps.jpg" width="180" alt="KonnectTV app manager with real app icons">
-  <img src=".github/assets/detox.jpg" width="180" alt="KonnectTV Detox list of apps safe to turn off">
-  <img src=".github/assets/boost.jpg" width="180" alt="KonnectTV Boost with RAM and storage rings and the Glowlauncher orb">
+  <img src="app/src/main/res/mipmap-anydpi/ic_launcher.xml" width="96" alt="Aura TV Tools Logo" />
 </p>
 
-<p align="center"><a href="https://github.com/yashoncode/konnect-tv/releases/latest"><b>⬇ Download the latest KonnectTV</b></a></p>
+<p align="center">
+  <b>Aplikasi remote kontrol TV & STB Android modern dengan Live Screen Mirroring, Auto-Discovery Subnet instan, Debloat (Detox), Optimasi (Boost), dan penginstal resmi Aura TV Home.</b>
+</p>
 
-## Real results
+<p align="center">
+  <a href="https://github.com/luthpunk/aura-tv-tools/releases/latest"><b>⬇ Download Aura TV Tools APK Terbaru</b></a>
+</p>
 
-Measured on a 1 GB Google TV (CHiQ, Android 14): Google TV's own home with apps left running, then Glowlauncher after Boost cleared background apps. Median of 3 cold starts each.
+---
 
-| | Before | After KonnectTV |
-|:--|--:|--:|
-| Netflix opens in | 1.72 s | **0.85 s** (2× faster) |
-| Prime Video opens in | 3.37 s | **1.87 s** (1.8× faster) |
-| Home screen memory | 80 MB | **21 MB** (4× lighter) |
-| Free memory | 255 MB | **308 MB** |
+## 🌟 Fitur Utama
 
-Your TV will differ. The older and more cluttered it is, the bigger the gain. Raw output, method and the script to run it yourself: [docs/BENCHMARK.md](docs/BENCHMARK.md).
+- 📺 **Live Screen Mirroring & Kontrol Realtime**
+  - Tampilkan layar Android TV / STB secara langsung di ponsel Anda.
+  - Mendukung dua mode: **⚡ Rapid Snapshot** (ringan dan 100% kompatibel di semua STB) serta **📹 Hardware H.264 Video Decoder** (720p / 480p low-latency).
+  - Sidebar remote kontrol bertema *Matte Dark* terpadu dengan D-Pad circular, feedback haptik getar, dan tombol navigasi lengkap.
+  - Tangkapan layar (Screenshot) instan yang otomatis tersimpan ke folder `Pictures/AuraTV` galeri ponsel.
+  - Menggunakan stream multiplexing ADB langsung dari sesi aktif sehingga tidak ada delay koneksi ganda atau dialog otorisasi berulang.
 
-## Features
+- 🔍 **Pencarian Cepat (Subnet Auto-Discovery)**
+  - Pemindaian subnet `/24` paralel pada port ADB 5555 dalam waktu ~1-1.5 detik.
+  - Langsung mendeteksi STB IndiHome, ZTE, Fiberhome, Xiaomi, dan Android TV lainnya di jaringan Wi-Fi lokal tanpa perlu mengetik alamat IP secara manual.
+  - Mendukung penemuan otomatis via mDNS (`_androidtvremote2._tcp.` & `_adb-tls-connect._tcp.`).
 
-- ✨ **Glowlauncher.** A calm home screen for your TV: a big clock and only the apps you pick, in one glowing dock. Choose the glow colour, or RGB to fade through all of them.
-- 🧹 **Detox.** One tap turns off sponsored rows, screensavers and promo apps. Apps are turned off, never deleted, and every change can be undone.
-- ⚡ **Boost.** See free RAM and storage, turn off animations so menus open instantly, stop the screensaver, set a sleep timer and clear background apps.
-- 🎮 **Remote.** D-pad, OK, back, home, volume, mute, power and play/pause, with haptics on every tap. Type on the TV with your phone keyboard.
-- 📦 **App manager.** Every app on the TV with its real icon and name. Open, force stop, clear data, turn off or on, uninstall your own apps, and install an APK from your phone.
-- 📺 **Many TVs.** Finds Android TVs on your Wi-Fi by itself and remembers them. Switch between TVs from the top bar.
-- 🌗 **Light and dark.** One tap on the top bar.
-- 🔒 **Private.** No account, no ads, no tracking. Everything stays on your phone and your TV.
+- 🏠 **Integrasi Aura TV Home (Tab Boost)**
+  - Mengunduh dan memasang [Aura TV Home](https://github.com/luthpunk/aura-tv-home) langsung ke TV Anda melalui streaming ADB.
+  - Otomatis memberikan izin secure settings (`WRITE_SECURE_SETTINGS`) dan menjadikannya beranda utama TV.
+  - Tersedia opsi untuk mengembalikan launcher bawaan TV kapan saja dengan aman.
 
-## Install
+- 🎮 **Remote Control Modern**
+  - D-Pad melingkar ergonomis dengan tombol tengah OK beraksen *Mint Accent*.
+  - Tombol lengkap: Back, Home, Menu, Volume +, Volume −, Mute, Power, dan Play/Pause.
+  - Fitur pengetikan teks langsung dari keyboard ponsel ke TV.
 
-Download `KonnectTV.apk` from the [latest release](https://github.com/yashoncode/konnect-tv/releases/latest) and open it on your phone. The phone must run Android 12 or newer.
+- 🧹 **Detox (Debloat Otomatis)**
+  - Matikan bloatware, iklan sponsor, dan aplikasi bawaan yang memperlambat TV hanya dengan satu ketukan.
+  - Aplikasi dinonaktifkan (`pm disable-user`), bukan dihapus permanen, sehingga aman dan dapat dipulihkan kapan saja melalui tab Riwayat.
 
-## Set up the TV (once)
+- ⚡ **Boost & Optimasi Sistem**
+  - Pemantauan penggunaan RAM dan penyimpanan TV secara realtime.
+  - Sekali ketuk untuk membersihkan aplikasi latar belakang dan melegakan cache.
+  - Opsi mematikan animasi antarmuka TV agar menu terbuka instan tanpa jeda.
 
-1. On the TV, open **Settings › Device Preferences › About** (or **System › About**).
-2. Press OK on **Build** 7 times until it says you are a developer.
-3. Go back to **Developer options** and turn on **USB debugging**. If you see **Wireless debugging** or **Network debugging**, turn that on too.
+- 📦 **Manajer Aplikasi TV**
+  - Menampilkan semua aplikasi TV dengan nama dan ikon aslinya.
+  - Buka, paksa berhenti, hapus data aplikasi, atau pasang file APK dari penyimpanan ponsel langsung ke TV.
 
-## Connect
+---
 
-Put the phone and the TV on the same Wi-Fi and open KonnectTV. It finds Android TVs on the network by itself.
+## 📱 Panduan Pemasangan
 
-- **TVs with Wireless debugging** (Android 11 and newer): on the TV, open **Wireless debugging › Pair device with pairing code**. Tap the TV in KonnectTV and type the 6-digit code.
-- **Other TVs**: tap the TV. It asks **"Allow debugging?"**. Tick **Always allow** and press **Allow**.
-- **TV not listed?** Tap **Enter IP address manually**. The IP is under the TV's network settings. The port is 5555, or the one shown under Wireless debugging.
+1. Unduh file `aura-tv-tools.apk` dari [GitHub Releases](https://github.com/luthpunk/aura-tv-tools/releases/latest).
+2. Pasang pada ponsel Android Anda (Android 12+ / SDK 31+ didukung).
 
-After the first time, KonnectTV remembers the TV and reconnects in one tap.
+---
 
-## Safe by design
+## ⚙️ Persiapan TV / STB (Hanya Sekali)
 
-- Apps are **turned off** (`pm disable-user`), never deleted. Undo one change or everything from **Detox › History**.
-- KonnectTV never turns off Google Play, Play services, keyboards, Bluetooth, HDMI/TV inputs, Settings or the system UI. This applies to Detox and the app manager.
-- Only apps you installed yourself can be uninstalled. System apps can only be turned off.
-- Glowlauncher only turns off other launchers and home screens. It never turns off the TV maker's Live TV or input app, even when that app also answers the Home button.
-- The safe-to-turn-off list is in [`app/src/main/assets/debloat.json`](app/src/main/assets/debloat.json). Each entry has a plain-English reason. Pull requests for more brands are welcome.
+1. Di TV / STB Anda, buka **Pengaturan (Settings) › Preferensi Perangkat › Tentang (About)**.
+2. Ketuk baris **Build** sebanyak 7 kali hingga muncul notifikasi bahwa Anda telah menjadi pengembang (*Developer*).
+3. Buka **Opsi Pengembang (Developer Options)** dan aktifkan **USB Debugging** / **Debugging Nirkabel (Wireless Debugging)**.
+4. Hubungkan ponsel dan TV ke jaringan Wi-Fi yang sama.
 
-Works on Android TV and Google TV: Sony, TCL, Hisense, Philips, Xiaomi, Chromecast with Google TV, NVIDIA Shield and others. Samsung (Tizen), LG (webOS) and Roku don't run Android, so they can't be cleaned this way.
+---
 
-## Glowlauncher
+## 🚀 Cara Menghubungkan
 
-Glowlauncher is KonnectTV's own home screen for the TV: a big clock and the apps you pick in one glowing dock, with Inputs, Settings and network at the top right. It ships inside KonnectTV (about 45 KB), so nothing is downloaded. On the TV, hold OK or press Menu on an app to move or remove it. The **+** tile adds one. Turn it off from **Boost** to get the TV's own home back.
+1. Buka **Aura TV Tools** di ponsel Anda.
+2. TV Anda akan otomatis muncul di bagian **FOUND ON YOUR WI-FI** dalam hitungan detik.
+3. Ketuk nama TV untuk menghubungkan:
+   - Jika muncul dialog **"Izinkan debugging USB?"** di layar TV, centang **Selalu izinkan dari komputer ini** lalu pilih **Izinkan (Allow)**.
+   - Untuk TV dengan *Wireless Debugging Pair Code* (Android 11+), pilih opsi **Pair** dan masukkan 6 digit kode yang tampil di layar TV.
+4. Setelah terhubung pertama kali, aplikasi akan mengingat TV Anda dan dapat terhubung kembali dalam satu ketukan.
 
-**Turning it on can freeze low-memory TVs for a minute or two.** Changing the home screen is the heaviest thing a TV does. KonnectTV clears background apps first and shows each step on your phone while it works. If the TV freezes, leave it on and don't unplug it. It recovers by itself.
+---
 
-> Use at your own risk. This is what works on the TVs we tried. It is not professional advice.
+## 🛠️ Build dari Kode Sumber
 
-## Build it yourself
+Membutuhkan JDK 17+ dan Android SDK (compileSdk 37, targetSdk 36):
 
-You need JDK 17+ and the Android SDK (platform 37).
-
-```sh
-./gradlew :app:testDebugUnitTest :app:assembleRelease
+```bash
+git clone https://github.com/luthpunk/aura-tv-tools.git
+cd aura-tv-tools
+./gradlew assembleRelease
 ```
 
-The app uses Kotlin and Jetpack Compose. Glowlauncher (`glowlauncher/`) uses plain Android views so it stays small and runs on Android TV 5.0 and newer. ADB runs on [libadb-android](https://github.com/MuntashirAkon/libadb-android), which handles pairing and TLS. The frosted glass uses [Haze](https://github.com/chrisbanes/haze).
+Hasil build APK akan berada di folder `app/build/outputs/apk/release/`.
 
-To sign a release build, create `keystore.properties` in the project root. Never commit it.
+---
 
-```properties
-storeFile=konnecttv.jks
-storePassword=...
-keyAlias=konnecttv
-keyPassword=...
-```
+## 📄 Lisensi & Kredit
 
-## Credits
-
-Inspired by [TV Detox](https://github.com/Ansub/tv-detox). Glowlauncher is based on TV Detox's home screen.
-
-## Support KonnectTV
-
-KonnectTV is free, has no ads and always will. I build it in my spare time because I love using it.
-If it made your TV a little faster and you'd like to say thanks, you can buy me a coffee.
-It's completely optional, and every coffee is truly appreciated. ☕
-
-<p align="center"><a href="https://buymeacoffee.com/yashwynth"><img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000" alt="Buy me a coffee"></a></p>
-
-A star on GitHub or sharing KonnectTV with a friend helps just as much. Thank you for using it! ❤️
-
-## License
-
-MIT
+- Berdasarkan basis kode open-source [KonnectTV](https://github.com/yashoncode/konnect-tv) oleh Yashwynth, disesuaikan dan dikembangkan oleh [luthpunk](https://github.com/luthpunk).
+- Menggunakan [libadb-android](https://github.com/MuntashirAkon/libadb-android) untuk protokol komunikasi ADB.
+- Tampilan frosted glass didukung oleh [Haze](https://github.com/chrisbanes/haze).
+- Lisensi di bawah [MIT License](LICENSE).
