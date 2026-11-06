@@ -219,11 +219,6 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             busy.value = false
         }
     }
-            }
-        } finally {
-            busy.value = false
-        }
-    }
 
     private suspend fun record(change: Change) = lock.withLock {
         val id = tv?.id ?: return@withLock
