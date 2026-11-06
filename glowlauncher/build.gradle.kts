@@ -13,13 +13,13 @@ val keystoreProperties = Properties().apply {
 
 android {
     namespace = "io.konnecttv.glowlauncher"
-    compileSdk = 35
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "io.konnecttv.glowlauncher"
         // Android TV 5.0+: some 2015 TVs are still in use.
         minSdk = 21
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
     }
