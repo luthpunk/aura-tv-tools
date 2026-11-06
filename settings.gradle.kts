@@ -10,8 +10,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        // libadb-android (ADB pairing + TLS) is only published here.
+        maven("https://jitpack.io")
     }
 }
 
-rootProject.name = 'AuraTVTools'
-include ':app'
+rootProject.name = "AuraTVTools"
+include(":app", ":glowlauncher")

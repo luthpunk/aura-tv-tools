@@ -79,13 +79,39 @@ public class MirrorActivity extends Activity implements SurfaceHolder.Callback {
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
                 | WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        if (!AdbClient.get().isConnected()) {
-            Toast.makeText(this, "Belum terhubung ke STB!", Toast.LENGTH_SHORT).show();
-            finish();
-            return;
-        }
-
         buildUi();
+
+        String host = getIntent().getStringExtra("host");
+        int port = getIntent().getIntExtra("port", 5555);
+
+        if (!AdbClient.get().isConnected()) {
+            if (host != null && !host.trim().isEmpty()) {
+                if (statusBadge != null) {
+                    statusBadge.setText("Menghubungkan ke " + host + "...");
+                }
+                new Thread(() -> {
+                    try {
+                        AdbClient.get().connect(this, host.trim(), port);
+                        uiHandler.post(() -> {
+                            if (statusBadge != null) {
+                                statusBadge.setText("🟢 Terhubung ke " + host);
+                            }
+                            if (surfaceReady && !running) {
+                                startStreaming();
+                            }
+                        });
+                    } catch (Exception e) {
+                        uiHandler.post(() -> {
+                            Toast.makeText(this, "Gagal terhubung ke TV: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                            finish();
+                        });
+                    }
+                }).start();
+            } else {
+                Toast.makeText(this, "Belum terhubung ke STB!", Toast.LENGTH_SHORT).show();
+                finish();
+            }
+        }
     }
 
     private void buildUi() {
