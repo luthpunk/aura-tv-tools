@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2.0-id",
+  "versionCode": 4,
+  "versionName": "1.3.0-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "fix(mirror): use AdbClient.openStream with StreamChannel reader and clean manifest",
-  "releaseDate": "2026-11-05"
+  "changelog": "feat: KonnectTV UI redesign with 4 tabs, circular D-pad, screen mirroring button at remote bottom, Aura TV Home orb in Boost, and Detox debloat",
+  "releaseDate": "2026-11-06"
 }
