@@ -127,7 +127,7 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
         GlassSheet(launcherMenu, onDismiss = { launcherMenu = false }) {
             Text("Aura TV Home", style = Body.copy(fontSize = 17.sp))
             Text("Aktif di ${tv.name}.", style = Small)
-            PrimaryButton("Buka Aura TV Home") { launcherMenu = false; vm.key(io.konnecttv.adb.Key.HOME) }
+            PrimaryButton("Buka Aura TV Home") { launcherMenu = false; vm.openLauncher() }
             SecondaryButton("Kembalikan Beranda Bawaan TV") { launcherMenu = false; vm.setLauncher(false) }
         }
 

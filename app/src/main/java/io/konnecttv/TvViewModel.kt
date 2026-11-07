@@ -75,6 +75,7 @@ private const val LAUNCHER_ACTIVITY = "$LAUNCHER_PKG/.MainActivity"
 
 /** Aura TV Home service that answers Home on TVs that keep their own home (Google TV / Xiaomi). */
 private const val HOME_SERVICE = "$LAUNCHER_PKG/$LAUNCHER_PKG.HomeKeyService"
+private const val MEDIA_LISTENER = "$LAUNCHER_PKG/$LAUNCHER_PKG.MediaNotificationListener"
 private val HOME_SERVICE_SETTINGS = setOf("secure:enabled_accessibility_services", "secure:accessibility_enabled")
 
 /** The TV's enabled accessibility services with ours added, keeping whatever else was on. */
@@ -347,12 +348,16 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             "settings get global window_animation_scale; settings get secure screensaver_enabled; " +
                 "settings get system screen_off_timeout; (pm path $LAUNCHER_PKG; pm path $OLD_LAUNCHER_PKG) 2>/dev/null | head -1"
         ).lines()
+        val launcherOn = v.getOrNull(3)?.startsWith("package:") == true
+        if (launcherOn) {
+            runCatching { a.sh("cmd notification allow_listener $MEDIA_LISTENER") }
+        }
         return Tweaks(
             animationsOff = v.getOrNull(0)?.toFloatOrNull() == 0f,
             screensaverOff = v.getOrNull(1) == "0",
             sleepMinutes = v.getOrNull(2)?.toLongOrNull()?.let { (it / 60_000).toInt() },
             // Installed = on, so switching it off always cleans up, even after a half-finished setup.
-            launcherOn = v.getOrNull(3)?.startsWith("package:") == true,
+            launcherOn = launcherOn,
         )
     }
 
@@ -378,6 +383,10 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     // ---------- remote ----------
 
     fun key(code: Int) = work { it.keyevent(code) }
+    fun openLauncher() = work { a ->
+        a.sh("cmd notification allow_listener $MEDIA_LISTENER")
+        a.keyevent(io.konnecttv.adb.Key.HOME)
+    }
     fun type(text: String) = work { it.type(text) }
 
     // ---------- apps ----------
@@ -601,6 +610,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             // Set Aura TV Home as default launcher role holder and default activity
             a.sh("cmd role add-role-holder --user 0 android.app.role.HOME $LAUNCHER_PKG; cmd package set-home-activity $LAUNCHER_ACTIVITY")
             a.sh("pm grant $LAUNCHER_PKG android.permission.WRITE_SECURE_SETTINGS")
+            a.sh("cmd notification allow_listener $MEDIA_LISTENER")
 
             if (!isHomeActive(a)) {
                 // If TV ranks stock home above third-party launcher (Google TV / Xiaomi), enable Home accessibility service
