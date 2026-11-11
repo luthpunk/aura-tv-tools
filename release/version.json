@@ -2,6 +2,6 @@
   "versionCode": 11,
   "versionName": "1.4.6-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "feat: dialog pilihan mode launcher (bersih/berdampingan) & perkuat stabilitas koneksi background dengan keep-alive auto-reconnect",
+  "changelog": "fix: import kotlinx.coroutines.isActive in TvViewModel",
   "releaseDate": "2026-11-11"
 }
