@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
-  "versionName": "1.4.3-id",
+  "versionCode": 9,
+  "versionName": "1.4.4-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "feat(boost): auto-grant Now Playing media notification listener permission for Aura TV Home",
-  "releaseDate": "2026-11-07"
+  "changelog": "feat(boost): nonaktifkan otomatis launcher bawaan dan langsung jadikan Aura TV Home sebagai default launcher tanpa dialog pemilih aplikasi",
+  "releaseDate": "2026-11-11"
 }

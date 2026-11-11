@@ -53,14 +53,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import io.konnecttv.GLOW_ACCENTS
 import io.konnecttv.LAUNCHER_STEPS
-import io.konnecttv.RGB_GLOW
 import io.konnecttv.LauncherSetup
 import io.konnecttv.TabBarClearance
 import io.konnecttv.TvViewModel
 import io.konnecttv.data.SavedTv
-import io.konnecttv.data.TvApp
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -68,16 +65,12 @@ private val SleepChoices = listOf(5, 15, 30, 60)
 private val Mint = Color(0xFF3FD6A0)
 private val Cyan = Color(0xFF9FF7FF)
 
-/** Streaming apps worth pre-ticking for the clean home, besides the user's own installs. */
-private val PopularHome = listOf("netflix", "amazonvideo", "primevideo", "youtube", "hotstar", "disney", "jiocinema", "zee5", "sonyliv", "spotify", "plex", "kodi")
-
 @Composable
 fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
     val mem by vm.memory.collectAsStateWithLifecycle()
     val tweaks by vm.tweaks.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     var pickSleep by remember { mutableStateOf(false) }
-    var pickHome by remember { mutableStateOf(false) }
     var launcherMenu by remember { mutableStateOf(false) }
     val launcherOn = tweaks?.launcherOn == true
 
@@ -95,7 +88,7 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
             tv.ramBefore?.let { Text("RAM bebas sebelum optimasi: ${gb(it)}", style = Small, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
 
             LauncherOrb(launcherOn, busy, tv.name) {
-                if (launcherOn) launcherMenu = true else { vm.loadHomeChoices(); pickHome = true }
+                if (launcherOn) launcherMenu = true else vm.setLauncher(true)
             }
 
             val t = tweaks
@@ -136,13 +129,6 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
             // Can't be swiped away while the TV is switching: closing it mid-way hides the only sign that work is going on.
             GlassSheet(true, onDismiss = { if (st.done || st.error != null) vm.closeLauncherSetup() }) {
                 SetupProgress(st) { vm.closeLauncherSetup() }
-            }
-        }
-
-        GlassSheet(pickHome, onDismiss = { pickHome = false }) {
-            HomePicker(vm, editing = launcherOn) { picked, accent ->
-                pickHome = false
-                if (launcherOn) vm.setHomeApps(picked, accent) else vm.setLauncher(true, picked, accent)
             }
         }
     }
@@ -256,95 +242,6 @@ private fun SetupProgress(st: LauncherSetup, onClose: () -> Unit) {
     }
     if (!running) PrimaryButton("Selesai", onClick = onClose)
 }
-
-/** Choose what the clean home shows. Preinstalled apps like Netflix and Prime are here too. */
-@Composable
-private fun HomePicker(vm: TvViewModel, editing: Boolean, onDone: (List<String>, Long) -> Unit) {
-    val choices by vm.homeChoices.collectAsStateWithLifecycle()
-    val icons by vm.icons.collectAsStateWithLifecycle()
-    val list = choices
-    var picked by remember(list) {
-        val saved = vm.homePicks()
-        mutableStateOf(list.orEmpty().filter { saved?.contains(it.pkg) ?: defaultOnHome(it) }.map { it.pkg }.toSet())
-    }
-    var accent by remember { mutableLongStateOf(vm.homeAccent()) }
-    Text(if (editing) "Glowlauncher" else "Set up Glowlauncher", style = Body.copy(fontSize = 17.sp))
-    GlowPreview(accent)
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        GLOW_ACCENTS.forEach { g ->
-            val on = g.rgb == accent
-            val fill = if (g.rgb == RGB_GLOW) Modifier.background(Brush.sweepGradient(Rainbow)) else Modifier.background(Color(0xFF000000 or g.rgb))
-            Box(
-                Modifier.size(34.dp).clip(CircleShape).then(fill)
-                    .border(if (on) 3.dp else 1.dp, if (on) C.Text else C.Border, CircleShape)
-                    .clickable { accent = g.rgb },
-            )
-        }
-    }
-    Text("Glow: ${GLOW_ACCENTS.first { it.rgb == accent }.name}", style = Small)
-    Text("Apps on your home", style = Section)
-    if (list == null) {
-        Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = C.Accent, strokeWidth = 2.dp) }
-    } else {
-        Column(Modifier.heightIn(max = 360.dp).verticalScroll(rememberScrollState())) {
-            list.forEach { app ->
-                Row(
-                    Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))
-                        .clickable { picked = if (app.pkg in picked) picked - app.pkg else picked + app.pkg }
-                        .padding(horizontal = 4.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    AppIcon(app.label, icons[app.pkg], 34.dp)
-                    Spacer(Modifier.width(12.dp))
-                    Text(app.label, style = Body, modifier = Modifier.weight(1f))
-                    Check(app.pkg in picked)
-                }
-            }
-        }
-    }
-    PrimaryButton(
-        when {
-            editing -> "Save (${picked.size} apps)"
-            else -> "Turn on with ${picked.size} apps"
-        },
-        enabled = list != null && picked.isNotEmpty(),
-    ) { onDone(list.orEmpty().map { it.pkg }.filter { it in picked }, accent) }
-}
-
-private val Rainbow = listOf(Color.Red, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Magenta, Color.Red)
-
-/** A tiny Glowlauncher: the clock over a dock, lit in the picked colour (or fading through them all for RGB). */
-@Composable
-private fun GlowPreview(accent: Long) {
-    val hue by rememberInfiniteTransition(label = "rgb").animateFloat(0f, 360f, infiniteRepeatable(tween(8000, easing = LinearEasing)), label = "hue")
-    val target = if (accent == RGB_GLOW) Color.hsv(hue, 0.65f, 1f) else Color(0xFF000000 or accent)
-    val glow by animateColorAsState(target, tween(if (accent == RGB_GLOW) 0 else 400), label = "glow")
-    Box(
-        Modifier.fillMaxWidth().height(120.dp).clip(RoundedCornerShape(16.dp)).background(Color(0xFF08090B)),
-        contentAlignment = Alignment.Center,
-    ) {
-        Canvas(Modifier.fillMaxSize()) {
-            drawCircle(Brush.radialGradient(listOf(glow.copy(alpha = 0.35f), Color.Transparent), center = center.copy(y = size.height * 0.72f), radius = size.width * 0.38f))
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text("9:41", style = Body.copy(color = Color.White, fontSize = 30.sp, fontWeight = FontWeight.Light))
-            Spacer(Modifier.height(8.dp))
-            Row(
-                Modifier.clip(RoundedCornerShape(20.dp)).background(Color.White.copy(alpha = 0.06f)).padding(horizontal = 10.dp, vertical = 7.dp),
-                horizontalArrangement = Arrangement.spacedBy(7.dp),
-            ) {
-                repeat(5) { i ->
-                    Box(
-                        Modifier.size(22.dp).clip(RoundedCornerShape(6.dp)).background(Color(0xFF16191E))
-                            .then(if (i == 0) Modifier.border(2.dp, lerp(glow, Color.White, 0.5f), RoundedCornerShape(6.dp)) else Modifier),
-                    )
-                }
-            }
-        }
-    }
-}
-
-private fun defaultOnHome(app: TvApp) = !app.system || PopularHome.any { it in app.pkg }
 
 @Composable
 private fun StatCard(title: String, freeKb: Long?, totalKb: Long?, modifier: Modifier) {

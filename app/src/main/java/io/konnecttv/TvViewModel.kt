@@ -47,19 +47,10 @@ data class Memory(val totalKb: Long, val freeKb: Long, val storageTotalKb: Long 
 data class LauncherSetup(val step: Int, val startedAt: Long, val done: Boolean = false, val error: String? = null)
 
 /** Glow colours Glowlauncher can use, picked when turning it on. [RGB_GLOW] fades through all of them. */
-data class GlowAccent(val name: String, val rgb: Long)
-
-const val RGB_GLOW = -1L
-
-val GLOW_ACCENTS = listOf(
-    GlowAccent("Mint", 0x3FD6A0), GlowAccent("Sky", 0x4FB3FF), GlowAccent("Violet", 0x9B7BFF),
-    GlowAccent("Rose", 0xFF6B9A), GlowAccent("Amber", 0xFFB547), GlowAccent("Snow", 0xE8ECF2), GlowAccent("RGB", RGB_GLOW),
-)
-
 val LAUNCHER_STEPS = listOf(
     "Menyiapkan ruang di TV",
     "Mengunduh & memasang Aura TV Home",
-    "Menjadikan sebagai Beranda Utama",
+    "Menjadikan Beranda Utama & Nonaktifkan Bawaan",
     "Membuka Aura TV Home"
 )
 
@@ -77,6 +68,21 @@ private const val LAUNCHER_ACTIVITY = "$LAUNCHER_PKG/.MainActivity"
 private const val HOME_SERVICE = "$LAUNCHER_PKG/$LAUNCHER_PKG.HomeKeyService"
 private const val MEDIA_LISTENER = "$LAUNCHER_PKG/$LAUNCHER_PKG.MediaNotificationListener"
 private val HOME_SERVICE_SETTINGS = setOf("secure:enabled_accessibility_services", "secure:accessibility_enabled")
+
+private val KNOWN_STOCK_LAUNCHERS = listOf(
+    "com.google.android.apps.tv.launcherx",
+    "com.google.android.tvlauncher",
+    "com.google.android.leanbacklauncher",
+    "com.xiaomi.mitv.tvhome",
+    "com.mitv.tvhome",
+    "com.inapp.launcher",
+    "com.zte.browser",
+    "com.fiberhome.launcher",
+    "com.fiberhome.ottlauncher",
+    "com.zte.ztestb",
+    "com.android.launcher",
+    "com.android.launcher3",
+)
 
 /** The TV's enabled accessibility services with ours added, keeping whatever else was on. */
 internal fun withService(enabled: String, service: String): String =
@@ -362,7 +368,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun isHomeActive(a: Adb) =
-        a.sh("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1") == LAUNCHER_ACTIVITY
+        a.sh("cmd package resolve-activity --brief -a android.intent.action.MAIN -c android.intent.category.HOME | tail -1").contains(LAUNCHER_PKG)
 
     /** Changes a setting and keeps its original value once, so undo restores what the TV had. */
     private suspend fun putSetting(a: Adb, namespace: String, key: String, value: String, label: String) {
@@ -500,27 +506,11 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         say("Berhasil melegakan ${((memory.value!!.freeKb - before).coerceAtLeast(0)) / 1024} MB RAM.")
     }
 
-    fun setLauncher(on: Boolean, homeApps: List<String> = emptyList(), accent: Long = GLOW_ACCENTS.first().rgb) =
-        work { a -> if (on) installLauncher(a, homeApps, accent) else removeLauncher(a) }
+    private fun isPkgInstalled(a: Adb, pkg: String): Boolean =
+        a.sh("pm path $pkg").contains("package:")
 
-    /** Apps the clean home can show: anything with a TV launcher icon, preinstalled ones (Netflix, Prime) included. */
-    val homeChoices = MutableStateFlow<List<TvApp>?>(null)
-
-    fun loadHomeChoices() = work { a ->
-        homeChoices.value = null
-        val launchable = a.sh("cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.LEANBACK_LAUNCHER")
-            .lines().filter { '/' in it }.map { it.trim().substringBefore('/') }.toSet() - LAUNCHER_PKG
-        if (apps.value.isEmpty()) apps.value = readApps(a)
-        homeChoices.value = apps.value.filter { it.pkg in launchable && !it.disabled }
-        loadIcons(a)
-    }
-
-    /** Changes which apps the clean home shows, while it is already on. */
-    fun setHomeApps(homeApps: List<String>, accent: Long) = work { a ->
-        sendHomeApps(a, homeApps, accent)
-        a.keyevent(io.konnecttv.adb.Key.HOME)
-        say("Beranda TV berhasil diperbarui.")
-    }
+    fun setLauncher(on: Boolean) =
+        work { a -> if (on) installLauncher(a) else removeLauncher(a) }
 
     private val prefs = app.getSharedPreferences("konnecttv", 0)
 
@@ -529,26 +519,13 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         prefs.edit().putBoolean("light", io.konnecttv.ui.C.light).apply()
     }
 
-    /** What the user last put on this TV's clean home, so editing starts from their picks. */
-    fun homePicks(): Set<String>? = tv?.let { prefs.getStringSet("home-${it.id}", null) }
-
-    /** The glow colour last picked for this TV, as 0xRRGGBB. */
-    fun homeAccent(): Long = tv?.let { prefs.getLong("accent-${it.id}", GLOW_ACCENTS.first().rgb) } ?: GLOW_ACCENTS.first().rgb
-
-    private fun sendHomeApps(a: Adb, homeApps: List<String>, accent: Long) {
-        if (homeApps.isEmpty()) return
-        tv?.let { prefs.edit().putStringSet("home-${it.id}", homeApps.toSet()).putLong("accent-${it.id}", accent).apply() }
-        val hex = if (accent == RGB_GLOW) "rgb" else "%06X".format(accent and 0xFFFFFF)
-        a.sh("am start -n $LAUNCHER_ACTIVITY --es apps '${homeApps.joinToString(",")}' --es accent $hex --es stamp ${System.currentTimeMillis() / 1000}")
-    }
-
     val launcherSetup = MutableStateFlow<LauncherSetup?>(null)
 
     fun closeLauncherSetup() { launcherSetup.value = null }
 
     private fun setupStep(step: Int) = launcherSetup.update { it?.copy(step = step) }
 
-    private suspend fun installLauncher(a: Adb, homeApps: List<String>, accent: Long) {
+    private suspend fun installLauncher(a: Adb) {
         launcherSetup.value = LauncherSetup(0, System.currentTimeMillis())
         try {
             // Clear background apps first so TV has enough memory for switching launcher
@@ -604,8 +581,24 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
                 record(Change(System.currentTimeMillis(), "install", LAUNCHER_PKG, "Aura TV Home terpasang"))
             }
             history.value.filter { it.kind == "install" && it.target == OLD_LAUNCHER_PKG }.forEach { undoOne(a, it) }
+
             setupStep(2)
-            history.value.filter { it.kind == "home" }.forEach { undoOne(a, it) }
+
+            // Detect and disable stock/default launchers so Aura TV Home becomes the primary launcher
+            val stockLaunchers = a.sh("cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
+                .lines()
+                .filter { '/' in it }
+                .map { it.trim().substringBefore('/') }
+                .filter { it.isNotBlank() && it != LAUNCHER_PKG && it != OLD_LAUNCHER_PKG }
+                .toSet()
+
+            val allStockToDisable = (stockLaunchers + KNOWN_STOCK_LAUNCHERS.filter { isPkgInstalled(a, it) }) - LAUNCHER_PKG - OLD_LAUNCHER_PKG
+            for (pkg in allStockToDisable) {
+                runCatching { a.sh("pm disable-user --user 0 $pkg || pm disable $pkg") }
+                if (history.value.none { it.kind == "home" && it.target == pkg }) {
+                    record(Change(System.currentTimeMillis(), "home", pkg, "Beranda bawaan ($pkg)"))
+                }
+            }
 
             // Set Aura TV Home as default launcher role holder and default activity
             a.sh("cmd role add-role-holder --user 0 android.app.role.HOME $LAUNCHER_PKG; cmd package set-home-activity $LAUNCHER_ACTIVITY")
@@ -635,10 +628,16 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         history.value.filter { it.kind == "setting" && it.target in HOME_SERVICE_SETTINGS }.forEach { undoOne(a, it) }
 
     private suspend fun removeLauncher(a: Adb) {
+        // Re-enable all stock launchers that were disabled
         history.value.filter { it.kind == "home" }.forEach { undoOne(a, it) }
+        for (pkg in KNOWN_STOCK_LAUNCHERS) {
+            runCatching { a.sh("pm enable $pkg") }
+        }
         undoHomeService(a)
         history.value.filter { it.kind == "install" && (it.target == LAUNCHER_PKG || it.target == OLD_LAUNCHER_PKG) }.forEach { undoOne(a, it) }
         a.sh("pm uninstall $LAUNCHER_PKG")
+        a.sh("cmd role clear-role-holders android.app.role.HOME")
+        a.keyevent(io.konnecttv.adb.Key.HOME)
         tweaks.value = readTweaks(a)
         apps.value = readApps(a)
         say("Beranda bawaan TV telah dipulihkan.")
