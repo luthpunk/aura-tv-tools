@@ -83,6 +83,11 @@ class MainActivity : ComponentActivity() {
             CompositionLocalProvider(LocalHaze provides haze, LocalSheetHost provides sheets, LocalIndication provides indication) { Root(vm) }
         }
     }
+
+    override fun onResume() {
+        super.onResume()
+        vm.resumeConnection()
+    }
 }
 
 @Composable

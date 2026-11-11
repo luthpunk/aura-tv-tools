@@ -71,6 +71,7 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
     val tweaks by vm.tweaks.collectAsStateWithLifecycle()
     val busy by vm.busy.collectAsStateWithLifecycle()
     var pickSleep by remember { mutableStateOf(false) }
+    var pickMode by remember { mutableStateOf(false) }
     var launcherMenu by remember { mutableStateOf(false) }
     val launcherOn = tweaks?.launcherOn == true
 
@@ -88,7 +89,7 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
             tv.ramBefore?.let { Text("RAM bebas sebelum optimasi: ${gb(it)}", style = Small, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth()) }
 
             LauncherOrb(launcherOn, busy, tv.name) {
-                if (launcherOn) launcherMenu = true else vm.setLauncher(true)
+                if (launcherOn) launcherMenu = true else pickMode = true
             }
 
             val t = tweaks
@@ -122,6 +123,34 @@ fun BoostScreen(vm: TvViewModel, tv: SavedTv) {
             Text("Aktif di ${tv.name}.", style = Small)
             PrimaryButton("Buka Aura TV Home") { launcherMenu = false; vm.openLauncher() }
             SecondaryButton("Kembalikan Beranda Bawaan TV") { launcherMenu = false; vm.setLauncher(false) }
+        }
+
+        GlassSheet(pickMode, onDismiss = { pickMode = false }) {
+            Text("Pasang Aura TV Home", style = Body.copy(fontSize = 18.sp, fontWeight = FontWeight.SemiBold))
+            Text("Pilih mode pemasangan beranda untuk ${tv.name}:", style = Small)
+            Spacer(Modifier.height(4.dp))
+
+            Card(onClick = {
+                pickMode = false
+                vm.setLauncher(on = true, disableStock = true)
+            }) {
+                Column(Modifier.fillMaxWidth()) {
+                    Text("1. Nonaktifkan Launcher Bawaan (Rekomendasi)", style = Body.copy(fontWeight = FontWeight.SemiBold, color = C.Accent))
+                    Spacer(Modifier.height(3.dp))
+                    Text("Bebas iklan & bersih total. Tombol Home remote TV 100% langsung membuka Aura TV Home tanpa popup pilihan.", style = Small)
+                }
+            }
+
+            Card(onClick = {
+                pickMode = false
+                vm.setLauncher(on = true, disableStock = false)
+            }) {
+                Column(Modifier.fillMaxWidth()) {
+                    Text("2. Tetap Aktifkan Launcher Bawaan (Berdampingan)", style = Body.copy(fontWeight = FontWeight.SemiBold))
+                    Spacer(Modifier.height(3.dp))
+                    Text("Launcher bawaan tetap aktif di latar belakang. Aura TV Home dijadikan launcher default utama.", style = Small)
+                }
+            }
         }
 
         val setup by vm.launcherSetup.collectAsStateWithLifecycle()

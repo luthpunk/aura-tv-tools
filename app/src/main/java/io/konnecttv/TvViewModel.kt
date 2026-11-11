@@ -161,9 +161,58 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     /** The connection being opened, so Cancel or the watchdog can close it and unblock connect(). */
     @Volatile private var pending: Adb? = null
+    private var keepAliveJob: kotlinx.coroutines.Job? = null
 
     fun cancelConnect() {
         pending?.runCatching { close() }
+    }
+
+    private fun startKeepAlive() {
+        keepAliveJob?.cancel()
+        keepAliveJob = viewModelScope.launch(Dispatchers.IO) {
+            while (isActive) {
+                kotlinx.coroutines.delay(15_000)
+                val targetTv = tv ?: continue
+                val currentAdb = adb
+                if (currentAdb == null || !currentAdb.isConnected) {
+                    reconnectQuietly(targetTv)
+                } else {
+                    runCatching {
+                        currentAdb.sh("echo 1")
+                    }.onFailure {
+                        reconnectQuietly(targetTv)
+                    }
+                }
+            }
+        }
+    }
+
+    internal suspend fun reconnectQuietly(targetTv: SavedTv): Boolean = withContext(Dispatchers.IO) {
+        lock.withLock {
+            runCatching {
+                if (adb?.isConnected == true) {
+                    val alive = runCatching { adb?.sh("echo 1")?.contains("1") == true }.getOrDefault(false)
+                    if (alive) return@withContext true
+                }
+                adb?.runCatching { close() }
+                val newA = Adb(getApplication())
+                if (newA.connect(targetTv.host, targetTv.port)) {
+                    adb = newA
+                    activeAdb = newA
+                    _conn.value = Conn.On(targetTv)
+                    true
+                } else {
+                    false
+                }
+            }.getOrDefault(false)
+        }
+    }
+
+    fun resumeConnection() = viewModelScope.launch(Dispatchers.IO) {
+        val currentTv = tv ?: saved.value.firstOrNull() ?: return@launch
+        if (adb == null || adb?.isConnected != true) {
+            reconnectQuietly(currentTv)
+        }
     }
 
     fun connect(host: String, port: Int, name: String? = null, quiet: Boolean = false) = viewModelScope.launch {
@@ -194,6 +243,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             history.value = store.history(savedTv.id)
             _conn.value = Conn.On(savedTv)
             refreshAll()
+            startKeepAlive()
         }.onFailure { e ->
             activeAdb = null
             android.util.Log.w("KonnectTV", "connect $host:$port failed", e)
@@ -228,6 +278,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun disconnect() = viewModelScope.launch(Dispatchers.IO) {
+        keepAliveJob?.cancel()
+        keepAliveJob = null
         lock.withLock { adb?.runCatching { close() }; adb = null; activeAdb = null }
         _conn.value = Conn.Off
     }
@@ -242,12 +294,31 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Runs TV work off the main thread; any failure becomes a message, a dropped link goes back to Connect. */
     private fun work(block: suspend (Adb) -> Unit) = viewModelScope.launch {
-        val a = adb ?: return@launch say("Belum terhubung ke TV.")
+        var a = adb
+        val currentTv = tv
+        if (a == null || !a.isConnected) {
+            if (currentTv != null) {
+                reconnectQuietly(currentTv)
+                a = adb
+            }
+        }
+        if (a == null || !a.isConnected) return@launch say("Belum terhubung ke TV.")
         busy.value = true
         try {
             withContext(Dispatchers.IO) { block(a) }
         } catch (e: Exception) {
-            if (!a.isConnected) {
+            if (!a.isConnected && currentTv != null) {
+                val ok = reconnectQuietly(currentTv)
+                val retryAdb = adb
+                if (ok && retryAdb != null && retryAdb.isConnected) {
+                    try {
+                        withContext(Dispatchers.IO) { block(retryAdb) }
+                        return@launch
+                    } catch (retryEx: Exception) {
+                        say(retryEx.message ?: "Terjadi kesalahan.")
+                        return@launch
+                    }
+                }
                 _conn.value = Conn.Off
                 activeAdb = null
                 say("Koneksi ke TV terputus.")
@@ -542,8 +613,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     private fun isPkgInstalled(a: Adb, pkg: String): Boolean =
         a.sh("pm path $pkg").contains("package:")
 
-    fun setLauncher(on: Boolean) =
-        work { a -> if (on) installLauncher(a) else removeLauncher(a) }
+    fun setLauncher(on: Boolean, disableStock: Boolean = true) =
+        work { a -> if (on) installLauncher(a, disableStock) else removeLauncher(a) }
 
     private val prefs = app.getSharedPreferences("konnecttv", 0)
 
@@ -558,7 +629,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun setupStep(step: Int) = launcherSetup.update { it?.copy(step = step) }
 
-    private suspend fun installLauncher(a: Adb) {
+    private suspend fun installLauncher(a: Adb, disableStock: Boolean) {
         launcherSetup.value = LauncherSetup(0, System.currentTimeMillis())
         try {
             // Clear background apps first so TV has enough memory for switching launcher
@@ -624,21 +695,32 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
                 forgetChange(change)
             }
 
-            // Detect and disable ONLY genuine stock launchers
-            val stockLaunchers = a.sh("cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
-                .lines()
-                .filter { '/' in it }
-                .map { it.trim().substringBefore('/') }
-                .filter { isSafeToDisableAsLauncher(it) }
-                .toSet()
+            if (disableStock) {
+                // Detect and disable ONLY genuine stock launchers
+                val stockLaunchers = a.sh("cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
+                    .lines()
+                    .filter { '/' in it }
+                    .map { it.trim().substringBefore('/') }
+                    .filter { isSafeToDisableAsLauncher(it) }
+                    .toSet()
 
-            val allStockToDisable = (stockLaunchers + KNOWN_STOCK_LAUNCHERS.filter { isPkgInstalled(a, it) })
-                .filter { isSafeToDisableAsLauncher(it) }
+                val allStockToDisable = (stockLaunchers + KNOWN_STOCK_LAUNCHERS.filter { isPkgInstalled(a, it) })
+                    .filter { isSafeToDisableAsLauncher(it) }
 
-            for (pkg in allStockToDisable) {
-                runCatching { a.sh("pm disable-user --user 0 $pkg || pm disable $pkg") }
-                if (history.value.none { it.kind == "home" && it.target == pkg }) {
-                    record(Change(System.currentTimeMillis(), "home", pkg, "Beranda bawaan ($pkg)"))
+                for (pkg in allStockToDisable) {
+                    runCatching { a.sh("pm disable-user --user 0 $pkg || pm disable $pkg") }
+                    if (history.value.none { it.kind == "home" && it.target == pkg }) {
+                        record(Change(System.currentTimeMillis(), "home", pkg, "Beranda bawaan ($pkg)"))
+                    }
+                }
+            } else {
+                // Mode berdampingan: jika sebelumnya ada launcher yang dinonaktifkan, aktifkan kembali
+                history.value.filter { it.kind == "home" }.forEach { change ->
+                    runCatching { a.sh("pm enable ${change.target}") }
+                    forgetChange(change)
+                }
+                for (pkg in KNOWN_STOCK_LAUNCHERS) {
+                    runCatching { a.sh("pm enable $pkg") }
                 }
             }
 
@@ -647,12 +729,10 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
             a.sh("pm grant $LAUNCHER_PKG android.permission.WRITE_SECURE_SETTINGS")
             a.sh("cmd notification allow_listener $MEDIA_LISTENER")
 
-            if (!isHomeActive(a)) {
-                // If TV ranks stock home above third-party launcher (Google TV / Xiaomi), enable Home accessibility service
-                val enabled = a.sh("settings get secure enabled_accessibility_services")
-                putSetting(a, "secure", "enabled_accessibility_services", withService(enabled, HOME_SERVICE), "Tombol Home membuka Aura TV Home")
-                putSetting(a, "secure", "accessibility_enabled", "1", "Tombol Home membuka Aura TV Home")
-            }
+            // Always ensure Home accessibility service is configured so Home button opens Aura TV Home reliably
+            val enabled = a.sh("settings get secure enabled_accessibility_services")
+            putSetting(a, "secure", "enabled_accessibility_services", withService(enabled, HOME_SERVICE), "Tombol Home membuka Aura TV Home")
+            putSetting(a, "secure", "accessibility_enabled", "1", "Tombol Home membuka Aura TV Home")
 
             setupStep(3)
             a.sh("am start -n $LAUNCHER_ACTIVITY")
@@ -688,6 +768,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        keepAliveJob?.cancel()
         adb?.runCatching { close() }
     }
 }
