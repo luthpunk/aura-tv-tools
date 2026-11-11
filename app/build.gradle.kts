@@ -21,8 +21,8 @@ android {
         // Android 12+: RenderEffect gives real backdrop blur everywhere.
         minSdk = 31
         targetSdk = 36
-        versionCode = 9
-        versionName = "1.4.4-id"
+        versionCode = 10
+        versionName = "1.4.5-id"
         // Phones only: x86 builds would double Conscrypt's native size for emulators and Chromebooks.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }

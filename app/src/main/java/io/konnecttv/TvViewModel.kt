@@ -69,7 +69,7 @@ private const val HOME_SERVICE = "$LAUNCHER_PKG/$LAUNCHER_PKG.HomeKeyService"
 private const val MEDIA_LISTENER = "$LAUNCHER_PKG/$LAUNCHER_PKG.MediaNotificationListener"
 private val HOME_SERVICE_SETTINGS = setOf("secure:enabled_accessibility_services", "secure:accessibility_enabled")
 
-private val KNOWN_STOCK_LAUNCHERS = listOf(
+private val KNOWN_STOCK_LAUNCHERS = setOf(
     "com.google.android.apps.tv.launcherx",
     "com.google.android.tvlauncher",
     "com.google.android.leanbacklauncher",
@@ -83,6 +83,38 @@ private val KNOWN_STOCK_LAUNCHERS = listOf(
     "com.android.launcher",
     "com.android.launcher3",
 )
+
+private val NEVER_DISABLE_PACKAGES = setOf(
+    "android",
+    "com.android.settings",
+    "com.android.tv.settings",
+    "com.google.android.tungsten.setupwraith",
+    "com.android.setupwizard",
+    "com.google.android.setupwizard",
+    "com.android.systemui",
+    "com.google.android.gms",
+    "com.google.android.gsf",
+    "com.android.vending",
+    "com.android.packageinstaller",
+    "com.google.android.packageinstaller",
+    "com.android.permissioncontroller",
+    "com.google.android.permissioncontroller",
+    "com.google.android.tv.remote.service",
+    LAUNCHER_PKG,
+    OLD_LAUNCHER_PKG,
+)
+
+private val CRITICAL_SYSTEM_PARTS = listOf(
+    "setting", "setup", "wizard", "systemui", "inputmethod",
+    ".ime", "keyboard", "bluetooth", "tvinput", "hdmi", "webview", "provider"
+)
+
+private fun isSafeToDisableAsLauncher(pkg: String): Boolean {
+    val lower = pkg.lowercase()
+    if (lower in NEVER_DISABLE_PACKAGES) return false
+    if (CRITICAL_SYSTEM_PARTS.any { lower.contains(it) }) return false
+    return pkg in KNOWN_STOCK_LAUNCHERS || lower.contains("launcher") || lower.contains("tvhome") || lower.endsWith(".home")
+}
 
 /** The TV's enabled accessibility services with ours added, keeping whatever else was on. */
 internal fun withService(enabled: String, service: String): String =
@@ -240,6 +272,7 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun refreshAll() = work { a ->
+        runCatching { a.sh("pm enable com.android.tv.settings; pm enable com.android.settings") }
         apps.value = readApps(a)
         loadIcons(a)
         memory.value = readMemory(a)
@@ -584,15 +617,24 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
 
             setupStep(2)
 
-            // Detect and disable stock/default launchers so Aura TV Home becomes the primary launcher
+            // Safety first: Re-enable critical settings/system packages if disabled previously
+            a.sh("pm enable com.android.tv.settings; pm enable com.android.settings")
+            history.value.filter { it.kind == "home" && !isSafeToDisableAsLauncher(it.target) }.forEach { change ->
+                a.sh("pm enable ${change.target}")
+                forgetChange(change)
+            }
+
+            // Detect and disable ONLY genuine stock launchers
             val stockLaunchers = a.sh("cmd package query-activities --brief -a android.intent.action.MAIN -c android.intent.category.HOME")
                 .lines()
                 .filter { '/' in it }
                 .map { it.trim().substringBefore('/') }
-                .filter { it.isNotBlank() && it != LAUNCHER_PKG && it != OLD_LAUNCHER_PKG }
+                .filter { isSafeToDisableAsLauncher(it) }
                 .toSet()
 
-            val allStockToDisable = (stockLaunchers + KNOWN_STOCK_LAUNCHERS.filter { isPkgInstalled(a, it) }) - LAUNCHER_PKG - OLD_LAUNCHER_PKG
+            val allStockToDisable = (stockLaunchers + KNOWN_STOCK_LAUNCHERS.filter { isPkgInstalled(a, it) })
+                .filter { isSafeToDisableAsLauncher(it) }
+
             for (pkg in allStockToDisable) {
                 runCatching { a.sh("pm disable-user --user 0 $pkg || pm disable $pkg") }
                 if (history.value.none { it.kind == "home" && it.target == pkg }) {
@@ -633,6 +675,8 @@ class TvViewModel(app: Application) : AndroidViewModel(app) {
         for (pkg in KNOWN_STOCK_LAUNCHERS) {
             runCatching { a.sh("pm enable $pkg") }
         }
+        // Always ensure Settings is enabled
+        runCatching { a.sh("pm enable com.android.tv.settings; pm enable com.android.settings") }
         undoHomeService(a)
         history.value.filter { it.kind == "install" && (it.target == LAUNCHER_PKG || it.target == OLD_LAUNCHER_PKG) }.forEach { undoOne(a, it) }
         a.sh("pm uninstall $LAUNCHER_PKG")

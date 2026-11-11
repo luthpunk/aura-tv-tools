@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
-  "versionName": "1.4.4-id",
+  "versionCode": 10,
+  "versionName": "1.4.5-id",
   "apkUrl": "https://github.com/luthpunk/aura-tv-tools/releases/latest/download/aura-tv-tools.apk",
-  "changelog": "feat(boost): auto disable stock launcher on boost and eliminate obsolete home app picker",
+  "changelog": "fix(boost): batasi penonaktifan hanya untuk launcher murni & lindungi Settings TV dari ketidaksengajaan",
   "releaseDate": "2026-11-11"
 }
